@@ -4,7 +4,7 @@ Introduction
 
 AVlogue is a Django reusable app to manage, and automatically convert, audio and video files.
 
-Use case: When a client – usually, a Web browser on a computer or mobile device – needs to play back an audio/video file, it is necessary to provide it with an appropriate stream. The container and codecs must be supported by the client itself, the audio frequency/resolution must be supported, and the video resolution must be suitable for the device's screen.
+Use case: when a client – usually, a Web browser on a computer or mobile device – needs to play back an audio/video file, it is necessary to provide it with an appropriate stream. The container and codecs must be supported by the client itself, the audio frequency/resolution must be supported, and the video resolution must be suitable for the device's screen.
 
 The typical usage of AVlogue
 ----------------------------
@@ -30,7 +30,7 @@ Features
 
  - AVlogue stores information about different AV output formats in the database; it picks the needed output formats at run-time when a video is uploaded, or it can be asked to perform conversions at a later time.
 
- - AVlogue stores information about each uploaded or generated file in the database, including relevant metadata (e.g. resolution, codecs, container format, bitrate). The uploaded file and the generated converted files are linked to the same Audio or Video object. 
+ - AVlogue stores information about each uploaded or generated file in the database, including relevant metadata (e.g. resolution, codecs, container format, bitrate). The uploaded file and the generated converted files are linked to the same Audio or Video object.
 
  - AVlogue exposes an API for other applications to access the list of available resource for a certain Audio or Video objects.
 
@@ -39,4 +39,3 @@ Features
 
 
 
- 
