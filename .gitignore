@@ -1,3 +1,11 @@
+### Tests
+
+media/
+static/
+test_media/
+test_ffmpeg_output_path/
+coverage/
+
 ### IDE
 # Pycharm
 .idea

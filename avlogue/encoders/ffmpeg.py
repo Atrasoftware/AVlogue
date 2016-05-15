@@ -1,0 +1,159 @@
+import json
+import logging
+import subprocess
+
+from avlogue import settings
+from avlogue.encoders.base import BaseEncoder
+
+
+class FFMpegEncoderError(Exception):
+    """
+    ffmpeg command execution error.
+    """
+    pass
+
+
+class FFMpegEncoder(BaseEncoder):
+    """
+    FFMpeg encoder.
+    """
+
+    def _probe(self, input_file):
+        """
+        Executes ffprobe to get streams info.
+        :param input_file:
+        :return:
+        """
+        cmd = (settings.FFPROBE_EXECUTABLE, input_file, '-loglevel', 'error',
+               '-show_streams', '-show_format', '-print_format', 'json')
+
+        logger = logging.getLogger('django')
+        logger.debug('ffprobe command: {}'.format(cmd))
+
+        output = subprocess.check_output(cmd)
+        if isinstance(output, bytes):
+            output = output.decode('utf-8')
+        return json.loads(output)
+
+    def _parse_audio_stream_data(self, stream):
+        bit_rate = stream.get('bit_rate', 0)  # NOTE: ffprobe may not return bitrate
+        if bit_rate is not None:
+            bit_rate = int(bit_rate)
+        codec = stream['codec_name']
+        return {
+            'audio_codec': codec,
+            'audio_bitrate': bit_rate,
+            'audio_channels': int(stream['channels'])
+        }
+
+    def _parse_video_stream_data(self, stream):
+        bit_rate = stream.get('bit_rate', 0)  # NOTE: ffprobe may not return bitrate
+        if bit_rate is not None:
+            bit_rate = int(bit_rate)
+        codec = stream['codec_name']
+        return {
+            'video_codec': codec,
+            'video_bitrate': bit_rate,
+            'video_width': int(stream['width']),
+            'video_height': int(stream['height'])
+        }
+
+    def get_file_info(self, input_file):
+        probe_data = self._probe(input_file)
+
+        # FIXME: first streams are used
+        video_streams = filter(lambda s: s['codec_type'] == 'video', probe_data['streams'])
+        audio_streams = filter(lambda s: s['codec_type'] == 'audio', probe_data['streams'])
+
+        if isinstance(video_streams, list):
+            video_streams = iter(video_streams)
+        if isinstance(audio_streams, list):
+            audio_streams = iter(audio_streams)
+        video_stream = next(video_streams, None)
+        audio_stream = next(audio_streams, None)
+
+        info = {
+            'bitrate': int(probe_data['format']['bit_rate']),
+            'size': int(probe_data['format']['size']),
+            'duration': float(probe_data['format']['duration'])
+        }
+        if video_stream is not None:
+            info.update(self._parse_video_stream_data(video_stream))
+        if audio_stream is not None:
+            info.update(self._parse_audio_stream_data(audio_stream))
+
+        return info
+
+    def _get_audio_params(self, encode_format):
+        params = []
+        audio_codec = settings.AUDIO_CODECS[encode_format.audio_codec]
+        if audio_codec is not None:
+            params.extend(('-acodec', audio_codec))
+        audio_bitrate = encode_format.audio_bitrate or 0
+        if audio_bitrate > 0:
+            params.extend(('-b:a', str(audio_bitrate)))
+
+        if encode_format.audio_codec_params:
+            params.extend(encode_format.audio_codec_params.split(' '))
+
+        if encode_format.audio_channels is not None:
+            params.extend(('-ac', str(encode_format.audio_channels)))
+
+        return params
+
+    def _get_video_params(self, encode_format):
+        params = ['-vcodec', settings.VIDEO_CODECS[encode_format.video_codec]]
+        if encode_format.video_codec_params:
+            params.extend(encode_format.video_codec_params.split(' '))
+
+        video_bitrate = encode_format.video_bitrate or 0
+        if video_bitrate > 0:
+            params.extend(('-b:v', str(video_bitrate)))
+            params.extend(('-maxrate', str(video_bitrate)))
+            params.extend(('-bufsize', str(video_bitrate * 2)))
+
+        if encode_format.video_width is not None and encode_format.video_height is not None:
+            if encode_format.video_aspect_mode == 'scale':
+                params.extend(('-vf', 'scale={}:{}'.format(encode_format.video_width, encode_format.video_height)))
+            elif encode_format.video_aspect_mode == 'scale_crop':
+                params.extend(('-vf', 'scale=(iw * sar) * max({width} / (iw * sar)\, {height}/ ih)'
+                                      ':ih * max({width} / (iw * sar)\, {height} / ih), crop={width}:{height}'
+                               .format(width=encode_format.video_width, height=encode_format.video_height)))
+        return params
+
+    def encode(self, media_file, output_file, encode_format):
+        """
+        Encode media_file to the encode_format with ffmpeg.
+        :param media_file:
+        :param output_file:
+        :param encode_format:
+        :return: Popen
+        """
+        from avlogue.models import VideoFile, AudioFile
+
+        if not isinstance(media_file, (VideoFile, AudioFile)):
+            raise TypeError('media_file must be instance of VideoFile or AudioFile')
+
+        cmd = [settings.FFMPEG_EXECUTABLE, '-y', '-i', media_file.file.path]
+        cmd.extend(('-loglevel', 'error'))
+        if isinstance(media_file, VideoFile):
+            containers = settings.VIDEO_CONTAINERS
+            cmd.extend(self._get_video_params(encode_format))
+            cmd.extend(('-threads', '0'))
+            cmd.extend(self._get_audio_params(encode_format))
+
+        elif isinstance(media_file, AudioFile):
+            containers = settings.AUDIO_CONTAINERS
+            cmd.extend(self._get_audio_params(encode_format))
+
+        cmd.extend(('-f', containers[encode_format.container]))
+        cmd.append(output_file)
+
+        logger = logging.getLogger('django')
+        logger.debug('ffmpeg encode command: {}'.format(cmd))
+
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        errors = p.communicate()[1]
+        if errors:
+            raise FFMpegEncoderError(errors, cmd)
+        return p

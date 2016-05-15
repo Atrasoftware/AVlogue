@@ -1,0 +1,168 @@
+[
+  {
+    "model": "avlogue.audioformat",
+    "pk": 1,
+    "fields": {
+      "audio_codec": "ac3",
+      "audio_bitrate": 128000,
+      "audio_channels": 2,
+      "name": "ac3",
+      "container": "ac3"
+    }
+  },
+  {
+    "model": "avlogue.audioformat",
+    "pk": 2,
+    "fields": {
+      "audio_codec": "mp3",
+      "audio_bitrate": 192000,
+      "audio_channels": 2,
+      "name": "mp3",
+      "container": "mp3"
+    }
+  },
+  {
+    "model": "avlogue.audioformat",
+    "pk": 3,
+    "fields": {
+      "audio_codec": "pcm_f32le",
+      "audio_channels": 1,
+      "name": "wav",
+      "container": "wav"
+    }
+  },
+  {
+    "model": "avlogue.audioformat",
+    "pk": 4,
+    "fields": {
+      "audio_codec": "pcm_s16be",
+      "audio_channels": 2,
+      "name": "aiff",
+      "container": "aiff"
+    }
+  },
+  {
+    "model": "avlogue.audioformat",
+    "pk": 5,
+    "fields": {
+      "audio_codec": "vorbis",
+      "name": "ogg",
+      "container": "ogg"
+    }
+  },
+  {
+    "model": "avlogue.videoformat",
+    "pk": 1,
+    "fields": {
+      "audio_codec": "ac3",
+      "audio_bitrate": 128000,
+      "audio_channels": 1,
+      "video_codec": "h264",
+      "video_codec_params": "-vprofile main -preset slower",
+      "video_bitrate": 500000,
+      "video_width": null,
+      "video_height": null,
+      "video_aspect_mode": "scale",
+      "name": "mkv",
+      "container": "mkv"
+    }
+  },
+  {
+    "model": "avlogue.videoformat",
+    "pk": 2,
+    "fields": {
+      "audio_codec": "vorbis",
+      "audio_bitrate": 96000,
+      "audio_channels": 2,
+      "video_codec": "vp8",
+      "video_codec_params": "-quality good -qmin 10 -qmax 42",
+      "video_bitrate": 1000000,
+      "video_width": -1,
+      "video_height": 720,
+      "video_aspect_mode": "scale",
+      "name": "webm",
+      "container": "webm"
+    }
+  },
+  {
+    "model": "avlogue.videoformat",
+    "pk": 3,
+    "fields": {
+      "audio_codec": "aac",
+      "audio_bitrate": 96000,
+      "audio_channels": 2,
+      "audio_codec_params": "-profile:a aac_he_v2",
+      "video_codec": "h264",
+      "video_codec_params": "-vprofile main -preset slower",
+      "video_bitrate": 5000,
+      "video_width": -1,
+      "video_height": 480,
+      "video_aspect_mode": "scale",
+      "name": "mp4",
+      "container": "mp4"
+    }
+  },
+  {
+    "model": "avlogue.videoformat",
+    "pk": 4,
+    "fields": {
+      "audio_codec": "aac",
+      "audio_bitrate": 128000,
+      "audio_channels": 1,
+      "video_codec": "h264",
+      "video_codec_params": "-vprofile main -preset slower",
+      "video_bitrate": 500000,
+      "video_width": -2,
+      "video_height": 480,
+      "video_aspect_mode": "scale",
+      "name": "flv",
+      "container": "flv"
+    }
+  },
+  {
+    "model": "avlogue.videoformat",
+    "pk": 5,
+    "fields": {
+      "audio_codec": "aac",
+      "audio_bitrate": 128000,
+      "audio_channels": 1,
+      "video_codec": "mpeg4",
+      "video_codec_params": "-vtag xvid",
+      "video_bitrate": 500000,
+      "video_width": 640,
+      "video_height": 480,
+      "video_aspect_mode": "scale_crop",
+      "name": "avi",
+      "container": "avi"
+    }
+  },
+  {
+    "model": "avlogue.videoformatset",
+    "pk": 1,
+    "fields": {
+      "name": "video-formats",
+      "formats": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  {
+    "model": "avlogue.audioformatset",
+    "pk": 1,
+    "fields": {
+      "name": "audio-formats",
+      "formats": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  }
+]
