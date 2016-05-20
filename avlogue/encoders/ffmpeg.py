@@ -4,9 +4,19 @@ import subprocess
 
 from avlogue import settings
 from avlogue.encoders.base import BaseEncoder
+from avlogue.encoders.exceptions import GetFileInfoError, EncodeError
+
+logger = logging.getLogger('django')
 
 
-class FFMpegEncoderError(Exception):
+class FFProbeError(GetFileInfoError):
+    """
+    ffprobe command execution error.
+    """
+    pass
+
+
+class FFMpegEncoderError(EncodeError):
     """
     ffmpeg command execution error.
     """
@@ -27,16 +37,19 @@ class FFMpegEncoder(BaseEncoder):
         cmd = (settings.FFPROBE_EXECUTABLE, input_file, '-loglevel', 'error',
                '-show_streams', '-show_format', '-print_format', 'json')
 
-        logger = logging.getLogger('django')
         logger.debug('ffprobe command: {}'.format(cmd))
 
-        output = subprocess.check_output(cmd)
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output, errors = p.communicate()
+        if errors:
+            logger.error('ffprobe error: {}.\ncmd={}'.format(errors, cmd))
+            raise FFProbeError(errors, cmd)
         if isinstance(output, bytes):
             output = output.decode('utf-8')
         return json.loads(output)
 
     def _parse_audio_stream_data(self, stream):
-        bit_rate = stream.get('bit_rate', 0)  # NOTE: ffprobe may not return bitrate
+        bit_rate = stream.get('bit_rate')  # NOTE: ffprobe may not return bitrate
         if bit_rate is not None:
             bit_rate = int(bit_rate)
         codec = stream['codec_name']
@@ -47,7 +60,7 @@ class FFMpegEncoder(BaseEncoder):
         }
 
     def _parse_video_stream_data(self, stream):
-        bit_rate = stream.get('bit_rate', 0)  # NOTE: ffprobe may not return bitrate
+        bit_rate = stream.get('bit_rate')  # NOTE: ffprobe may not return bitrate
         if bit_rate is not None:
             bit_rate = int(bit_rate)
         codec = stream['codec_name']
@@ -61,7 +74,7 @@ class FFMpegEncoder(BaseEncoder):
     def get_file_info(self, input_file):
         probe_data = self._probe(input_file)
 
-        # FIXME: first streams are used
+        # NOTE: first streams are used
         video_streams = filter(lambda s: s['codec_type'] == 'video', probe_data['streams'])
         audio_streams = filter(lambda s: s['codec_type'] == 'audio', probe_data['streams'])
 
@@ -89,9 +102,8 @@ class FFMpegEncoder(BaseEncoder):
         audio_codec = settings.AUDIO_CODECS[encode_format.audio_codec]
         if audio_codec is not None:
             params.extend(('-acodec', audio_codec))
-        audio_bitrate = encode_format.audio_bitrate or 0
-        if audio_bitrate > 0:
-            params.extend(('-b:a', str(audio_bitrate)))
+        if encode_format.audio_bitrate is not None:
+            params.extend(('-b:a', str(encode_format.audio_bitrate)))
 
         if encode_format.audio_codec_params:
             params.extend(encode_format.audio_codec_params.split(' '))
@@ -106,11 +118,10 @@ class FFMpegEncoder(BaseEncoder):
         if encode_format.video_codec_params:
             params.extend(encode_format.video_codec_params.split(' '))
 
-        video_bitrate = encode_format.video_bitrate or 0
-        if video_bitrate > 0:
-            params.extend(('-b:v', str(video_bitrate)))
-            params.extend(('-maxrate', str(video_bitrate)))
-            params.extend(('-bufsize', str(video_bitrate * 2)))
+        if encode_format.video_bitrate is not None:
+            params.extend(('-b:v', str(encode_format.video_bitrate)))
+            params.extend(('-maxrate', str(encode_format.video_bitrate)))
+            params.extend(('-bufsize', str(encode_format.video_bitrate * 2)))
 
         if encode_format.video_width is not None and encode_format.video_height is not None:
             if encode_format.video_aspect_mode == 'scale':
@@ -129,31 +140,32 @@ class FFMpegEncoder(BaseEncoder):
         :param encode_format:
         :return: Popen
         """
-        from avlogue.models import VideoFile, AudioFile
+        from avlogue.models import Video, Audio
 
-        if not isinstance(media_file, (VideoFile, AudioFile)):
-            raise TypeError('media_file must be instance of VideoFile or AudioFile')
+        if not isinstance(media_file, (Video, Audio)):
+            raise TypeError('media_file must be instance of Video or Audio')
 
         cmd = [settings.FFMPEG_EXECUTABLE, '-y', '-i', media_file.file.path]
         cmd.extend(('-loglevel', 'error'))
-        if isinstance(media_file, VideoFile):
+        if isinstance(media_file, Video):
             containers = settings.VIDEO_CONTAINERS
             cmd.extend(self._get_video_params(encode_format))
             cmd.extend(('-threads', '0'))
             cmd.extend(self._get_audio_params(encode_format))
 
-        elif isinstance(media_file, AudioFile):
+        elif isinstance(media_file, Audio):
             containers = settings.AUDIO_CONTAINERS
             cmd.extend(self._get_audio_params(encode_format))
 
         cmd.extend(('-f', containers[encode_format.container]))
         cmd.append(output_file)
 
-        logger = logging.getLogger('django')
         logger.debug('ffmpeg encode command: {}'.format(cmd))
 
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         errors = p.communicate()[1]
         if errors:
+            logger.error('ffmpeg conversion error: {}.Encode format: {}.\nFile: {}.\nCommand: {}.'.format(
+                errors, repr(encode_format), repr(media_file), cmd))
             raise FFMpegEncoderError(errors, cmd)
         return p

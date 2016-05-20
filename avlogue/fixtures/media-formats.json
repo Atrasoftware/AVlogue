@@ -95,7 +95,7 @@
       "video_codec": "h264",
       "video_codec_params": "-vprofile main -preset slower",
       "video_bitrate": 5000,
-      "video_width": -1,
+      "video_width": -2,
       "video_height": 480,
       "video_aspect_mode": "scale",
       "name": "mp4",

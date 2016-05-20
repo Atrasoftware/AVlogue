@@ -3,7 +3,7 @@
 media/
 static/
 test_media/
-test_ffmpeg_output_path/
+test_avlogue_temp_path/
 coverage/
 
 ### IDE

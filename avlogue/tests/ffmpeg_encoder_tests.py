@@ -8,8 +8,8 @@ from django.conf import settings
 from django.test import TestCase
 
 from avlogue.encoders import FFMpegEncoder
-from avlogue.encoders.ffmpeg import FFMpegEncoderError
-from avlogue.models import AudioFile, AudioFormat, VideoFormat, VideoFile
+from avlogue.encoders.exceptions import EncodeError, GetFileInfoError
+from avlogue.models import Audio, AudioFormat, VideoFormat, Video
 from avlogue.tests import factories
 from avlogue.tests import mocks
 
@@ -25,6 +25,8 @@ class FFMpegEncoderTestCase(TestCase):
         Tests FFMpegEncoder get_file_info.
         :return:
         """
+        encoder = FFMpegEncoder()
+        self.assertRaises(GetFileInfoError, encoder.get_file_info, 'invalid_file')
         with mock.patch.object(FFMpegEncoder, '_probe', lambda self, *args: mocks.ffprobe(*args)):
             encoder = FFMpegEncoder()
             info = encoder.get_file_info('video.mp4')
@@ -55,8 +57,8 @@ class FFMpegEncoderTestCase(TestCase):
         self.assertRaises(TypeError, encoder.encode, 'media_file', '', '123')
 
         encode_format = AudioFormat.objects.first()
-        media_file = mocks.get_mock_media_file('mock_audio.mp3', AudioFile)
-        self.assertRaises(FFMpegEncoderError, encoder.encode, media_file, '', encode_format)
+        media_file = mocks.get_mock_media_file('mock_audio.mp3', Audio)
+        self.assertRaises(EncodeError, encoder.encode, media_file, '', encode_format)
 
     def test_encode(self):
         """
@@ -67,9 +69,9 @@ class FFMpegEncoderTestCase(TestCase):
 
         def test_encode_formats(encode_formats, media_file_cls):
             media_file_factory = None
-            if media_file_cls == AudioFile:
+            if media_file_cls == Audio:
                 media_file_factory = factories.audio_file_factory
-            elif media_file_cls == VideoFile:
+            elif media_file_cls == Video:
                 media_file_factory = factories.video_file_factory
 
             for input_format in encode_formats:
@@ -85,15 +87,15 @@ class FFMpegEncoderTestCase(TestCase):
                             encoder.encode(media_file, output_file, encode_format)
                             self.assertTrue(os.path.exists(output_file))
                             output_file_info = encoder.get_file_info(output_file)
-                            if media_file_cls in (AudioFile, VideoFile):
+                            if media_file_cls in (Audio, Video):
                                 self.assertEqual(output_file_info['audio_codec'], encode_format.audio_codec)
 
-                            if media_file_cls == VideoFile:
+                            if media_file_cls == Video:
                                 self.assertEqual(output_file_info['video_codec'], encode_format.video_codec)
 
                         finally:
                             media_file.delete()
                             os.remove(output_file)
-        VideoFormat
-        # test_encode_formats(VideoFormat.objects.all(), VideoFile)
-        # test_encode_formats(AudioFormat.objects.all(), AudioFile)
+
+        test_encode_formats(VideoFormat.objects.all(), Video)
+        test_encode_formats(AudioFormat.objects.all(), Audio)

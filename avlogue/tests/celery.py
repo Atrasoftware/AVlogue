@@ -1,3 +1,6 @@
+"""
+Celery app configuration, which is used for testing.
+"""
 from __future__ import absolute_import
 
 from celery import Celery

@@ -1,4 +1,4 @@
-Avlogue
+AVlogue
 ============
 
 AVlogue is a Django reusable app to manage, and automatically convert, audio and video files.

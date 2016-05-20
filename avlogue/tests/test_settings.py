@@ -4,8 +4,7 @@ import os
 
 DEBUG = True
 
-logging.getLogger("factory").setLevel(logging.DEBUG)
-# logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 
 SITE_ID = 1
 
@@ -77,4 +76,6 @@ CELERY_CACHE_BACKEND = 'memory'
 
 from .celery import *  # NOQA
 
-AVLOGUE_FFMPEG_OUTPUT_PATH = os.path.join(APP_ROOT, '..', 'test_ffmpeg_output_path')
+AVLOGUE_TEMP_PATH = os.path.abspath(os.path.join(APP_ROOT, '..', 'test_avlogue_temp_path'))
+AVLOGUE_FFMPEG_EXECUTABLE = '/usr/local/Cellar/ffmpeg/3.0.2/bin/ffmpeg'
+AVLOGUE_FFPROBE_EXECUTABLE = '/usr/local/Cellar/ffmpeg/3.0.2/bin/ffprobe'

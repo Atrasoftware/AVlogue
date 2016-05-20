@@ -1,5 +1,5 @@
 """
-Avlogue models test cases.
+AVlogue models test cases.
 """
 import os
 
@@ -9,14 +9,14 @@ from django.core.files.storage import FileSystemStorage
 from django.test import TestCase
 
 from avlogue.encoders import default_encoder
-from avlogue.models import VideoFile, VideoFormat, AudioFormat, AudioFile, VideoFormatSet, AudioFormatSet
+from avlogue.models import Video, VideoFormat, AudioFormat, Audio, VideoFormatSet, AudioFormatSet
 from avlogue.tests import factories
 from avlogue.tests import mocks
 
 
 class ModelsTestCase(TestCase):
     """
-    Avlogue model tests.
+    AVlogue model tests.
     """
 
     fixtures = ['media-formats.json']
@@ -28,14 +28,27 @@ class ModelsTestCase(TestCase):
         for media_format_set in (VideoFormatSet.objects.first(), AudioFormatSet.objects.first()):
             self.assertEqual(str(media_format_set), media_format_set.name)
 
+    def test_video_resolution(self):
+        """
+        Tests video resolution format.
+        """
+        video = Video(video_height=1, video_width=2)
+        self.assertEqual(video.resolution, '2x1')
+
+        video = Video(video_height=None, video_width=2)
+        self.assertEqual(video.resolution, '2x')
+
+        video = Video(video_height=None, video_width=None)
+        self.assertEqual(video.resolution, None)
+
     def test_audio_video_file_crud(self):
         """
-        Tests CRUD for AudioFile/VideoFile.
+        Tests CRUD for Audio/Video.
         """
 
         def assert_media_file_fields(media_file):
             """
-            Assert that AudioFile/VideoFile object has the same fields as encoder provides.
+            Assert that Audio/Video object has the same fields as encoder provides.
             :param media_file:
             :return:
             """
@@ -58,7 +71,7 @@ class ModelsTestCase(TestCase):
                 self.assertIsNotNone(media_file)
                 assert_media_file_fields(media_file)
 
-                # Check deletion of an old file during AudioFile/VideoFile file changing
+                # Check deletion of an old file during Audio/Video object changing
                 with file_factory(file_name='new_test_media_file', encode_format=media_format) as new_file_path:
                     media_old_file_path = media_file.file.path
                     self.assertTrue(os.path.exists(media_old_file_path))
@@ -68,18 +81,18 @@ class ModelsTestCase(TestCase):
 
                     self.assertFalse(os.path.exists(media_old_file_path))
 
-                # Check AudioFile/VideoFile file deletion during object deletion
+                # Check Audio/Video file deletion during object deletion
                 media_file_path = media_file.file.path
                 self.assertTrue(os.path.exists(media_file_path))
                 media_file.delete()
                 self.assertFalse(os.path.exists(media_file_path))
 
-        test_crud(AudioFormat, AudioFile, factories.audio_file_factory)
-        test_crud(VideoFormat, VideoFile, factories.video_file_factory)
+        test_crud(AudioFormat, Audio, factories.audio_file_factory)
+        test_crud(VideoFormat, Video, factories.video_file_factory)
 
     def test_convert(self):
         """
-        Test AudioFile/VideoFile conversation and creation of streams.
+        Test Audio/Video conversion and creation of streams.
         :return:
         """
 
@@ -88,7 +101,7 @@ class ModelsTestCase(TestCase):
             def mock_save(self, name, content):
                 return name
 
-            if issubclass(media_file_cls, VideoFile):
+            if issubclass(media_file_cls, Video):
                 media_format_set = VideoFormatSet.objects.first()
             else:
                 media_format_set = AudioFormatSet.objects.first()
@@ -109,30 +122,35 @@ class ModelsTestCase(TestCase):
                 mock_open = mock.MagicMock(return_value=mock_file)
 
                 with mock.patch('avlogue.tasks.open', mock_open):
-                    task = media_file.convert(media_format_set)
-                    streams = task.get()
+                    with mock.patch.object(default_encoder, 'get_file_info', mocks.get_file_info):
+                        task = media_file.convert(media_format_set)
+                        streams = task.get()
 
-                    self.assertTrue(len(streams), media_format_set.formats.count() - 1)
-                    stream = streams[0]
-                    self.assertEqual(str(stream), "{}: {}".format(str(stream.format), str(media_file)))
-                    for stream in streams:
-                        self.assertTrue(stream in media_file.streams.all())
-                        self.assertIsNotNone(stream.size)
+                        self.assertTrue(len(streams), media_format_set.formats.count() - 1)
+                        stream = streams[0]
+                        self.assertEqual(str(stream), "{}: {}".format(str(stream.format), str(media_file)))
+                        for stream in streams:
+                            self.assertTrue(stream in media_file.streams.all())
+                            self.assertIsNotNone(stream.size)
+
+                        task = media_file.convert(media_format_set)
+                        new_streams = task.get()
+                        self.assertEqual(list(s.id for s in new_streams), list(s.id for s in streams))
 
                 popen_patcher.stop()
 
-        test_media_file_conversion(AudioFile)
-        test_media_file_conversion(VideoFile)
+        test_media_file_conversion(Audio)
+        test_media_file_conversion(Video)
 
     def test_convert_to_higher_encode_format(self):
         """
-        Tests that conversation will be not performed for the higher format.
+        Tests that conversion will be not performed for the higher format.
         :return:
         """
-        media_file = mocks.get_mock_media_file('media_file.mp3', AudioFile)
+        media_file = mocks.get_mock_media_file('media_file.mp3', Audio)
         format_with_higher_bitrate = AudioFormat(
             name='format_with_higher_bitrate',
-            audio_bitrate=media_file.bitrate + 1000,
+            audio_bitrate=media_file.audio_bitrate + 1000,
             audio_codec=media_file.audio_codec
         )
         format_with_higher_bitrate.save()

@@ -9,6 +9,8 @@ Unfortunately there seems to be an issue with either South or syncdb so that
 defining two routers ("default" and "south") does not work.
 
 """
+import os
+
 from .test_settings import *  # NOQA
 
 DATABASES = {
@@ -18,4 +20,4 @@ DATABASES = {
     }
 }
 
-MEDIA_ROOT = os.path.join(APP_ROOT, '..', 'media')
+MEDIA_ROOT = os.path.join(APP_ROOT, '..', 'media')  # NOQA

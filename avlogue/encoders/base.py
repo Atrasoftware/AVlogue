@@ -3,17 +3,15 @@ class BaseEncoder(object):
     Base class for encoder.
     """
 
-    @classmethod
-    def get_file_info(cls, input_file):
+    def get_file_info(self, input_file):
         """
-        Returns dict of VideoFile/AudioFile fields.
+        Returns dict of Video/Audio fields.
         :param input_file:
         :return:
         """
         raise NotImplementedError  # pragma: no cover
 
-    @classmethod
-    def encode(cls, media_file, output_file, encode_format):
+    def encode(self, media_file, output_file, encode_format):
         """
         Encodes media_file to specified encode_format.
         :param media_file:
