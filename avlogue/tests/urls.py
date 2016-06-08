@@ -12,6 +12,7 @@ django_version = django.get_version()
 
 urls = [
     url(r'^admin/', include(admin.site.urls)),
+    url(r'^example-page', include('avlogue.tests.example_app.urls')),
 ]
 
 if StrictVersion(django_version) < StrictVersion('1.9'):

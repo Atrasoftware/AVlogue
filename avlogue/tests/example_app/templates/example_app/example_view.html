@@ -1,0 +1,91 @@
+{% load avlogue_tags %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Example page</title>
+</head>
+<body>
+<h1>Example page</h1>
+<hr>
+<h2>Audio:</h2>
+
+<h3>Audio player</h3>
+<p>
+  {% avlogue_player audio loop="loop" %}
+</p>
+<pre>
+  {% verbatim %}
+    {% avlogue_player audio loop="loop" %}
+  {% endverbatim %}
+</pre>
+
+<h3>Audio player with custom bitrate</h3>
+<p>
+  {% avlogue_player audio min_bitrate=192000 %}
+</p>
+<pre>
+  {% verbatim %}
+    {% avlogue_player audio min_bitrate=192000 %}
+  {% endverbatim %}
+</pre>
+
+<hr>
+<h2>Video:</h2>
+
+<h3>
+  Video Player
+</h3>
+<p>
+  {% avlogue_player video width='100%' controls='controls' autoplay=False loop='loop' class='my-class' %}
+</p>
+
+<pre>
+  {% verbatim %}
+    {% avlogue_player video width='100%' controls='controls' autoplay=False loop='loop' class='my-class' %}
+  {% endverbatim %}
+</pre>
+
+
+<h3>
+  Video Player with streams filtered by formats
+</h3>
+<p>
+  {% avlogue_player video formats='vp8 WebM, h264 360p' %}
+</p>
+
+<pre>
+  {% verbatim %}
+    {% avlogue_player video formats='vp8 WebM, h264 360p' %}
+  {% endverbatim %}
+</pre>
+
+
+<h3>
+  Video Player with streams filtered by format sets
+</h3>
+<p>
+  {% avlogue_player video format_sets='480p video formats' %}
+</p>
+
+<pre>
+  {% verbatim %}
+  {% avlogue_player video format_sets='480p video formats' %}
+  {% endverbatim %}
+</pre>
+
+<h3>
+  Video Player with custom bitrate
+</h3>
+<p>
+  {% avlogue_player video max_bitrate=2000000 formats='h264 720p, theora 720p' %}
+</p>
+
+<pre>
+  {% verbatim %}
+  {% avlogue_player video max_bitrate=2000000 formats='h264 720p, theora 720p' %}
+  {% endverbatim %}
+</pre>
+
+</body>
+</html>

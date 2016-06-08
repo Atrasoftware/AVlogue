@@ -61,9 +61,10 @@ class ModelsTestCase(TestCase):
             with file_factory(file_name='test_{}_file'.format(media_format.name),
                               encode_format=media_format) as file_path:
                 # Test create by file path
-                media_file = media_file_cls.objects.create_from_file(file_path)
+                media_file = media_file_cls.objects.create_from_file(file_path, title='test media file')
                 self.assertIsNotNone(media_file)
-                self.assertTrue(str(media_file), 'test_media_file.{}'.format(media_format.container))
+                self.assertEqual(str(media_file), 'test media file')
+                self.assertIsNotNone(media_file.content_type)
                 media_file.delete()
 
                 # Test create by file object
@@ -105,7 +106,6 @@ class ModelsTestCase(TestCase):
                 media_format_set = VideoFormatSet.objects.first()
             else:
                 media_format_set = AudioFormatSet.objects.first()
-
             file_name = 'media_file.{}'.format(media_format_set.formats.first().container)
 
             with mock.patch.object(FileSystemStorage, 'save', mock_save):
@@ -119,24 +119,26 @@ class ModelsTestCase(TestCase):
 
                 mock_file = mock.MagicMock(spec=mock.sentinel.file_spec)
                 mock_file.size = 1
+                mock_file.name = file_name
                 mock_open = mock.MagicMock(return_value=mock_file)
 
                 with mock.patch('avlogue.tasks.open', mock_open):
                     with mock.patch.object(default_encoder, 'get_file_info', mocks.get_file_info):
-                        task = media_file.convert(media_format_set)
+                        task = media_file.convert(media_format_set.formats.all())
                         streams = task.get()
 
                         self.assertTrue(len(streams), media_format_set.formats.count() - 1)
                         stream = streams[0]
                         self.assertEqual(str(stream), "{}: {}".format(str(stream.format), str(media_file)))
+                        self.assertIsNotNone(stream.content_type, 'content type is None: {}'.format(stream))
                         for stream in streams:
                             self.assertTrue(stream in media_file.streams.all())
                             self.assertIsNotNone(stream.size)
 
-                        task = media_file.convert(media_format_set)
+                        task = media_file.convert(media_format_set.formats.all())
                         new_streams = task.get()
                         self.assertEqual(list(s.id for s in new_streams), list(s.id for s in streams))
-
+                self.assertIsNotNone(media_file.html_block())
                 popen_patcher.stop()
 
         test_media_file_conversion(Audio)
@@ -153,11 +155,6 @@ class ModelsTestCase(TestCase):
             audio_bitrate=media_file.audio_bitrate + 1000,
             audio_codec=media_file.audio_codec
         )
-        format_with_higher_bitrate.save()
-        format_set = AudioFormatSet(name='Test-audio-format-set')
-        format_set.save()
-        format_set.formats = [format_with_higher_bitrate]
-
-        task = media_file.convert(format_set)
-        streams = task.get()
-        self.assertEqual(len(streams), 0)
+        task = media_file.convert((format_with_higher_bitrate,))
+        self.assertIsNone(task)
+        self.assertEqual(media_file.streams.count(), 0)

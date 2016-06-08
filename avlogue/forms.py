@@ -18,7 +18,7 @@ class BaseMediaFileModelForm(forms.ModelForm):
         super(BaseMediaFileModelForm, self).full_clean()
         if self.is_valid() and 'file' in self.changed_data:
             try:
-                file_info = utils.get_media_file_info_from_file_in_memory(self.cleaned_data['file'])
+                file_info = utils.get_media_file_info_from_uploaded_file(self.cleaned_data['file'])
             except GetFileInfoError:
                 self.add_error('file', _("Can't get information about media file."))
             else:

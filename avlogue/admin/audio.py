@@ -11,7 +11,7 @@ from avlogue.utils import media_file_convert_action
 class AudioStreamInlineModelAdmin(admin.TabularInline):
     model = AudioStream
     extra = 0
-    fields = ('format', 'file', 'audio_codec', 'audio_bitrate', 'audio_channels', 'created', 'size')
+    fields = ('format', 'file', 'audio_codec', 'audio_bitrate', 'bitrate', 'audio_channels', 'created', 'size')
     readonly_fields = fields
 
     def has_add_permission(self, request):

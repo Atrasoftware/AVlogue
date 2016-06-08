@@ -21,3 +21,5 @@ DATABASES = {
 }
 
 MEDIA_ROOT = os.path.join(APP_ROOT, '..', 'media')  # NOQA
+AVLOGUE_FFMPEG_EXECUTABLE = '/usr/local/Cellar/ffmpeg/3.0.2/bin/ffmpeg'
+AVLOGUE_FFPROBE_EXECUTABLE = '/usr/local/Cellar/ffmpeg/3.0.2/bin/ffprobe'

@@ -1,0 +1,16 @@
+{% load static i18n %}
+<{{ tag }}
+{% for k,v in attrs.items %}
+  {% if v %}
+    {{ k }}="{{ v }}"
+  {% endif %}
+  {% if not streams %}
+    src="{% static media_file.file.url %}"
+    type="{{ media_file.content_type }}"
+  {% endif %}
+{% endfor %}>
+  {% for stream in streams %}
+    <source src="{% static stream.file.url %}" type="{{ stream.content_type }}">
+  {% endfor %}
+{% trans 'Your browser does not support the video tag.' %}
+</{{ tag }}>

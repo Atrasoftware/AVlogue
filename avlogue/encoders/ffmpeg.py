@@ -123,13 +123,15 @@ class FFMpegEncoder(BaseEncoder):
             params.extend(('-maxrate', str(encode_format.video_bitrate)))
             params.extend(('-bufsize', str(encode_format.video_bitrate * 2)))
 
-        if encode_format.video_width is not None and encode_format.video_height is not None:
+        if encode_format.video_width is not None or encode_format.video_height is not None:
+            video_width = encode_format.video_width or '-2'
+            video_height = encode_format.video_height or '-2'
             if encode_format.video_aspect_mode == 'scale':
-                params.extend(('-vf', 'scale={}:{}'.format(encode_format.video_width, encode_format.video_height)))
+                params.extend(('-vf', 'scale={}:{}'.format(video_width, video_height)))
             elif encode_format.video_aspect_mode == 'scale_crop':
                 params.extend(('-vf', 'scale=(iw * sar) * max({width} / (iw * sar)\, {height}/ ih)'
                                       ':ih * max({width} / (iw * sar)\, {height} / ih), crop={width}:{height}'
-                               .format(width=encode_format.video_width, height=encode_format.video_height)))
+                               .format(width=video_width, height=video_height)))
         return params
 
     def encode(self, media_file, output_file, encode_format):

@@ -7,6 +7,7 @@ import os
 from celery import shared_task
 from django.conf import settings as django_settings
 from django.core import files
+from django.utils.text import slugify
 
 from avlogue import settings
 from avlogue.encoders import default_encoder
@@ -17,7 +18,7 @@ def encode_media_file(media_file, encoded_formats):
     streams = []
     for encode_format in encoded_formats:
         output_filename = os.path.splitext(os.path.basename(media_file.file.name))[0]
-        output_filename = '{}_{}.{}'.format(output_filename, encode_format.name, encode_format.container)
+        output_filename = '{}_{}.{}'.format(output_filename, slugify(encode_format.name), encode_format.container)
         output_file = os.path.join(settings.TEMP_PATH, output_filename)
 
         try:

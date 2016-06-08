@@ -4,12 +4,14 @@ AVlogue models.
 
 from django.db import models
 from django.dispatch import receiver
+from django.template.loader import render_to_string
 from django.utils.six import python_2_unicode_compatible
 from django.utils.timezone import now
 from django.utils.translation import ugettext_lazy as _
 
 from avlogue import managers
 from avlogue import settings
+from avlogue.mime import mimetypes
 from avlogue.utils import ContentTypeValidator
 
 video_file_validator = ContentTypeValidator((r'video/.*',), message=_('Only video files are allowed.'))
@@ -81,7 +83,7 @@ class AudioFormat(BaseFormat, AudioFields):
     Audio encode format.
     """
     container = models.CharField(_('container format'), max_length=10,
-                                 choices=((name, name) for name in settings.AUDIO_CONTAINERS.keys()))
+                                 choices=((ext, name) for ext, name in settings.AUDIO_CONTAINERS.items()))
     audio_codec_params = models.CharField(_('audio codec params'), max_length=400, blank=True,
                                           help_text=_('Raw options to configure a selected audio codec'))
 
@@ -95,7 +97,7 @@ class VideoFormat(BaseFormat, VideoFields):
     Video encode format.
     """
     container = models.CharField(_('container format'), max_length=10,
-                                 choices=((name, name) for name in settings.VIDEO_CONTAINERS.keys()))
+                                 choices=((ext, name) for ext, name in settings.VIDEO_CONTAINERS.items()))
     audio_codec_params = models.CharField(_('audio codec params'), max_length=400, blank=True,
                                           help_text=_('Raw options to configure a selected audio codec'))
     video_codec_params = models.CharField(_('video codec params'), max_length=400, blank=True,
@@ -128,14 +130,14 @@ class AudioFormatSet(BaseFormatSet):
     """
     Set of audio formats.
     """
-    formats = models.ManyToManyField(AudioFormat, verbose_name=_('formats'))
+    formats = models.ManyToManyField(AudioFormat, verbose_name=_('formats'), related_name='format_sets')
 
 
 class VideoFormatSet(BaseFormatSet):
     """
     Set of video formats.
     """
-    formats = models.ManyToManyField(VideoFormat, verbose_name=_('formats'))
+    formats = models.ManyToManyField(VideoFormat, verbose_name=_('formats'), related_name='format_sets')
 
 
 @python_2_unicode_compatible
@@ -152,10 +154,25 @@ class MediaFile(MetaDataFields):
     def format_has_lower_quality(self, encode_format):
         raise NotImplementedError  # pragma: no cover
 
-    def convert(self, format_set):
+    def convert(self, encode_formats):
+        """
+        Converts media file to specified formats.
+        :param encode_formats: list of media file formats
+        :return:
+        """
         from avlogue import tasks
-        format_set = filter(self.format_has_lower_quality, format_set.formats.all())
-        return tasks.encode_media_file.delay(self, format_set)
+        encode_formats = list(filter(self.format_has_lower_quality, encode_formats))
+        if encode_formats:
+            return tasks.encode_media_file.delay(self, encode_formats)
+
+    @property
+    def content_type(self):
+        return mimetypes.guess_type(self.file.url)[0]
+
+    def html_block(self):
+        from avlogue.templatetags.avlogue_tags import avlogue_player
+        context = avlogue_player(self)
+        return render_to_string('avlogue/player_tag.html', context)
 
     def __str__(self):
         return self.title
@@ -211,6 +228,10 @@ class BaseStream(MetaDataFields):
 
     def __str__(self):
         return "{}: {}".format(str(self.format), str(self.media_file))
+
+    @property
+    def content_type(self):
+        return mimetypes.guess_type(self.file.url)[0]
 
     class Meta:
         abstract = True

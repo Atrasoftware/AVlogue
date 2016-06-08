@@ -1,8 +1,9 @@
-import mimetypes
 from io import BytesIO
 
 from django.core.files import File
 from django.core.files.uploadedfile import InMemoryUploadedFile
+
+from avlogue.mime import mimetypes
 
 
 def get_in_memory_uploaded_file(file_path, content_type=None):

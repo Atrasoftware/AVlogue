@@ -6,6 +6,7 @@ from django.core.files.storage import File, FileSystemStorage
 
 from avlogue import settings
 from avlogue.encoders import default_encoder
+from avlogue.models import Audio, Video
 
 MOCK_VIDEO_STREAM = {
     "index": 0,
@@ -175,7 +176,7 @@ def get_file_info(input_file):
     return info
 
 
-def get_mock_media_file(file_name, media_file_cls):
+def get_mock_media_file(file_name, media_file_cls, formats=None):
     def mock_save(self, name, content):
         return name
 
@@ -186,5 +187,23 @@ def get_mock_media_file(file_name, media_file_cls):
     with mock.patch.object(FileSystemStorage, 'save', mock_save):
         with mock.patch.object(default_encoder, 'get_file_info', get_file_info):
             media_file = media_file_cls.objects.create_from_file(file_mock)
+            if formats is not None:
+                for format in formats:
+                    stream_info = get_file_info(file_name)
+                    if media_file_cls == Video:
+                        if format.video_bitrate is not None:
+                            stream_info['bitrate'] = format.video_bitrate
+                            stream_info['video_bitrate'] = format.video_bitrate
+                        stream_info['video_codec'] = format.video_codec
+                    if media_file_cls in (Audio, Video):
+                        if format.audio_bitrate is not None:
+                            stream_info['bitrate'] = format.audio_bitrate
+                            stream_info['audio_bitrate'] = format.audio_bitrate
+                        stream_info['audio_codec'] = format.audio_codec
+
+                    stream = media_file.streams.model(media_file=media_file, file=file_mock, format=format,
+                                                      **stream_info)
+                    stream.save()
+                    media_file.streams.add(stream)
 
     return media_file

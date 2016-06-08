@@ -1,12 +1,12 @@
-import mimetypes
 import re
 
 from django.core.exceptions import ValidationError
 from django.core.files.temp import NamedTemporaryFile
-from django.core.files.uploadedfile import InMemoryUploadedFile
+from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 from django.utils.deconstruct import deconstructible
 from django.utils.translation import ugettext_lazy as _
 
+from avlogue.mime import mimetypes
 from avlogue import settings
 from avlogue.encoders import default_encoder
 
@@ -48,21 +48,24 @@ class ContentTypeValidator(object):
         )
 
 
-def get_media_file_info_from_file_in_memory(file_in_memory, encoder=None):
+def get_media_file_info_from_uploaded_file(file, encoder=None):
     """
     Saves file in memory into temporary path and returns info about it.
-    :param file_in_memory: django.core.files.File instance
+    :param file: django.core.files.File instance
     :param encoder: BaseEncoder instance or None
     :return:
     """
-    if not isinstance(file_in_memory, InMemoryUploadedFile):
-        raise TypeError('file_in_memory must be instance of InMemoryUploadedFile')
     encoder = encoder or default_encoder
-    with NamedTemporaryFile(delete=True, dir=settings.TEMP_PATH) as temp_file:
-        for chunk in file_in_memory.chunks():
-            temp_file.write(chunk)
-        temp_file.flush()
-        return encoder.get_file_info(temp_file.name)
+    if isinstance(file, TemporaryUploadedFile):
+        return encoder.get_file_info(file.file.name)
+    elif isinstance(file, InMemoryUploadedFile):
+        with NamedTemporaryFile(delete=True, dir=settings.TEMP_PATH) as temp_file:
+            for chunk in file.chunks():
+                temp_file.write(chunk)
+            temp_file.flush()
+            return encoder.get_file_info(temp_file.name)
+    else:
+        raise TypeError('file must be instance of TemporaryUploadedFile or InMemoryUploadedFile')
 
 
 def media_file_convert_action(format_set, model_admin, request, queryset):
@@ -81,5 +84,5 @@ def media_file_convert_action(format_set, model_admin, request, queryset):
         model_admin.message_user(request, _("Format set does'nt exist."))
     else:
         for obj in queryset:
-            obj.convert(format_set)
+            obj.convert(format_set.formats.all())
         model_admin.message_user(request, _("Streams creating is in process. They will be available soon."))

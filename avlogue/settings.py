@@ -27,22 +27,28 @@ FFMPEG_EXECUTABLE = get_avlogue_setting('FFMPEG_EXECUTABLE', 'ffmpeg')
 FFPROBE_EXECUTABLE = get_avlogue_setting('FFPROBE_EXECUTABLE', 'ffprobe')
 
 VIDEO_CODECS = get_avlogue_setting('VIDEO_CODECS', {
+    # name  # library
     'h264': 'libx264',
     'vp8': 'libvpx',
-    'mpeg4': 'mpeg4'
+    'mpeg4': 'mpeg4',
+    'theora': 'libtheora'
 })
 
 VIDEO_CONTAINERS = get_avlogue_setting('VIDEO_CONTAINERS', {
+    # ext  # name
     'mkv': 'matroska',
     'webm': 'webm',
     'avi': 'avi',
     'flv': 'flv',
     'mp4': 'mp4',
+    'ogg': 'ogg',
+    '3gp': '3gp'
 })
 
 AUDIO_CODECS = get_avlogue_setting('AUDIO_CODECS', {
+    # name  # library
     'mp3': 'libmp3lame',
-    'aac': 'libfdk_aac',
+    'aac': 'aac',
     'vorbis': 'libvorbis',
     'ac3': 'ac3',
     'pcm_f32le': 'pcm_f32le',
@@ -50,6 +56,7 @@ AUDIO_CODECS = get_avlogue_setting('AUDIO_CODECS', {
 })
 
 AUDIO_CONTAINERS = get_avlogue_setting('AUDIO_CONTAINERS', {
+    # ext  # name
     'mp3': 'mp3',
     'ac3': 'ac3',
     'wav': 'wav',
