@@ -5,6 +5,7 @@ REM Command file for Sphinx documentation
 if "%SPHINXBUILD%" == "" (
 	set SPHINXBUILD=sphinx-build
 )
+set SPHINXAUTOBUILD=sphinx-autobuild
 set BUILDDIR=build
 set ALLSPHINXOPTS=-d %BUILDDIR%/doctrees %SPHINXOPTS% source
 set I18NSPHINXOPTS=%SPHINXOPTS% source
@@ -19,6 +20,7 @@ if "%1" == "help" (
 	:help
 	echo.Please use `make ^<target^>` where ^<target^> is one of
 	echo.  html       to make standalone HTML files
+	@echo  livehtml   to watch and build HTML files
 	echo.  dirhtml    to make HTML files named index.html in directories
 	echo.  singlehtml to make a single large HTML file
 	echo.  pickle     to make pickle files
@@ -65,6 +67,13 @@ if "%1" == "html" (
 	if errorlevel 1 exit /b 1
 	echo.
 	echo.Build finished. The HTML pages are in %BUILDDIR%/html.
+	goto end
+)
+
+if "%1" == "livehtml" (
+	%SPHINXAUTOBUILD% -p 8001 -z ./../avlogue -b html %ALLSPHINXOPTS% %BUILDDIR%/html
+	if errorlevel 1 exit /b 1
+	echo.
 	goto end
 )
 

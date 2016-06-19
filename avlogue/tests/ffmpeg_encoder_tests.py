@@ -6,6 +6,7 @@ import os
 import mock
 from django.conf import settings
 from django.test import TestCase
+from unittest import skip
 
 from avlogue.encoders import FFMpegEncoder
 from avlogue.encoders.exceptions import EncodeError, GetFileInfoError
@@ -60,10 +61,10 @@ class FFMpegEncoderTestCase(TestCase):
         media_file = mocks.get_mock_media_file('mock_audio.mp3', Audio)
         self.assertRaises(EncodeError, encoder.encode, media_file, '', encode_format)
 
+    @skip("Checks encoding for all formats. Takes much time.")
     def test_encode(self):
         """
         Test encoding for default formats.
-        :return:
         """
         encoder = FFMpegEncoder()
 

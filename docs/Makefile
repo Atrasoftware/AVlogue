@@ -4,6 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
+SPHINXAUTOBUILD = sphinx-autobuild
 PAPER         =
 BUILDDIR      = build
 
@@ -24,6 +25,7 @@ I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) source
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
 	@echo "  html       to make standalone HTML files"
+	@echo "  livehtml   to watch and build HTML files"
 	@echo "  dirhtml    to make HTML files named index.html in directories"
 	@echo "  singlehtml to make a single large HTML file"
 	@echo "  pickle     to make pickle files"
@@ -53,6 +55,10 @@ html:
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
+
+livehtml:
+	$(SPHINXAUTOBUILD) -p 8001 -z ./../avlogue -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
+	@echo
 
 dirhtml:
 	$(SPHINXBUILD) -b dirhtml $(ALLSPHINXOPTS) $(BUILDDIR)/dirhtml

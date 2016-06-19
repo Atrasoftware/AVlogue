@@ -72,6 +72,15 @@ class FFMpegEncoder(BaseEncoder):
         }
 
     def get_file_info(self, input_file):
+        """
+        Executes ffprobe to get information about media file.
+
+        :param input_file: input file path
+        :type input_file: str
+
+        :return: Dictionary populated with Audio or Video fields
+        :rtype: dict
+        """
         probe_data = self._probe(input_file)
 
         # NOTE: first streams are used
@@ -137,10 +146,15 @@ class FFMpegEncoder(BaseEncoder):
     def encode(self, media_file, output_file, encode_format):
         """
         Encode media_file to the encode_format with ffmpeg.
-        :param media_file:
-        :param output_file:
-        :param encode_format:
-        :return: Popen
+
+        :param media_file: Video or Audio
+        :type media_file: avlogue.models.MediaFile
+        :param output_file: output file path
+        :type output_file: str
+        :param encode_format: VideoFormat or AudioFormat
+        :type encode_format: avlogue.models.BaseFormat
+
+        :rtype: subprocess.Popen
         """
         from avlogue.models import Video, Audio
 

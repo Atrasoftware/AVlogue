@@ -1,3 +1,8 @@
+"""
+Base encoder exceptions.
+"""
+
+
 class GetFileInfoError(Exception):
     """
     Exception, which can be raised during getting info about media file.

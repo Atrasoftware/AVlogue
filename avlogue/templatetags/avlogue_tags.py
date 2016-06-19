@@ -9,16 +9,25 @@ register = Library()
 def avlogue_player(media_file, formats=None, format_sets=None, bitrate=None, min_bitrate=None, max_bitrate=None,
                    **kwargs):
     """
-    Player template tag for audio and video.
-    :param media_file:
+    Player template tag for audio and video. Streams can be filtered by comma separated formats/format_sets names
+    and bitrate value. Other kwargs params will be added to the template tag as attributes.
+
+    :param media_file: Video or Audio
+    :type media_file: avlogue.models.MediaFile
     :param formats: comma separated names of formats
+    :type formats: str
     :param format_sets: comma separated names of format sets
-    :param bitrate:
-    :param min_bitrate:
-    :param max_bitrate:
-    :param kwargs: additional element attributes
+    :type format_sets: str
+    :param bitrate: streams bitrate
+    :type bitrate: int
+    :param min_bitrate: streams minimal bitrate
+    :type min_bitrate: int
+    :param max_bitrate: streams maximal bitrate
+    :type max_bitrate: int
+    :param kwargs: additional attributes for html element
     :return:
     """
+
     def filter_streams_by_formats(streams, formats):
         format_names = []
         for format_name in formats.split(','):

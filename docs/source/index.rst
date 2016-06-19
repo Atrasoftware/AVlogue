@@ -13,6 +13,10 @@ Contents:
 
    intro.rst
    usage.rst
+   configuration.rst
+   models.rst
+   encoder.rst
+   template_tags.rst
 
 
 * :ref:`genindex`

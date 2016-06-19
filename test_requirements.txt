@@ -7,3 +7,5 @@ mock
 tox
 django-compat
 six
+sphinx
+sphinx-autobuild

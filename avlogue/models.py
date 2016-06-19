@@ -58,7 +58,7 @@ class MetaDataFields(models.Model):
     """
     bitrate = models.PositiveIntegerField(_('average file bitrate'))
     duration = models.FloatField(_('duration'))
-    size = models.PositiveIntegerField(_('size'))
+    size = models.PositiveIntegerField(_('file size'))
 
     class Meta:
         abstract = True
@@ -130,7 +130,7 @@ class AudioFormatSet(BaseFormatSet):
     """
     Set of audio formats.
     """
-    formats = models.ManyToManyField(AudioFormat, verbose_name=_('formats'), related_name='format_sets')
+    formats = models.ManyToManyField(AudioFormat, verbose_name=_('audio formats'), related_name='format_sets')
 
 
 class VideoFormatSet(BaseFormatSet):
@@ -146,7 +146,7 @@ class MediaFile(MetaDataFields):
     Base media file model.
     """
     title = models.CharField(_('title'), max_length=50, unique=True)
-    slug = models.SlugField(_('title slug'), unique=True,
+    slug = models.SlugField(_('slug'), unique=True,
                             help_text=_('A "slug" is a unique URL-friendly title for an object.'))
     description = models.TextField(_('description'), blank=True)
     date_added = models.DateTimeField(_('date published'), default=now)
@@ -157,8 +157,11 @@ class MediaFile(MetaDataFields):
     def convert(self, encode_formats):
         """
         Converts media file to specified formats.
+        If one of formats has higher quality than media file, then such format will be skipped.
+
         :param encode_formats: list of media file formats
-        :return:
+        :type encode_formats: list
+        :returns :class:`celery.result.AsyncResult`:
         """
         from avlogue import tasks
         encode_formats = list(filter(self.format_has_lower_quality, encode_formats))
@@ -187,13 +190,16 @@ class Audio(MediaFile, AudioFields):
     """
     objects = managers.AudioQuerySet.as_manager()
 
-    file = models.FileField(_('file'), upload_to=settings.AUDIO_DIR, storage=settings.MEDIA_STORAGE,
+    file = models.FileField(_('audio file'), upload_to=settings.AUDIO_DIR, storage=settings.MEDIA_STORAGE,
                             validators=[audio_file_validator])
 
     def format_has_lower_quality(self, encode_format):
         """
         Return True if encode_format has a lower quality than current audio params.
+
         :param encode_format:
+        :type encode_format: AudioFormat
+        :rtype: bool
         :return:
         """
         bitrate = self.audio_bitrate or self.bitrate
@@ -206,13 +212,16 @@ class Video(MediaFile, VideoFields):
     """
     objects = managers.VideoQuerySet.as_manager()
 
-    file = models.FileField(_('file'), upload_to=settings.VIDEO_DIR, storage=settings.MEDIA_STORAGE,
+    file = models.FileField(_('video file'), upload_to=settings.VIDEO_DIR, storage=settings.MEDIA_STORAGE,
                             validators=[video_file_validator])
 
     def format_has_lower_quality(self, encode_format):
         """
         Return True if encode_format has a lower quality than current video params.
+
         :param encode_format:
+        :type encode_format: VideoFormat
+        :rtype: bool
         :return:
         """
         audio_bitrate = self.audio_bitrate or self.bitrate
