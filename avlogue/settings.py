@@ -83,3 +83,7 @@ MEDIA_STORAGE = get_avlogue_setting('MEDIA_FILE_STORAGE', default_storage)
 
 #: Audio/Video streams storage.
 MEDIA_STREAMS_STORAGE = get_avlogue_setting('MEDIA_STREAMS_STORAGE', default_storage)
+
+#: Video preview image size.  If you'd like to keep the aspect ratio, you need to specify only one component,
+#: either width or height, and set the other component to -1.
+VIDEO_PREVIEW_SIZE = get_avlogue_setting('VIDEO_PREVIEW_SIZE', '-1:250')

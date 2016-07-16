@@ -65,6 +65,8 @@ class ModelsTestCase(TestCase):
                 self.assertIsNotNone(media_file)
                 self.assertEqual(str(media_file), 'test media file')
                 self.assertIsNotNone(media_file.content_type)
+                if media_format_cls == Video:
+                    self.assertIsNotNone(media_file.preview.name)
                 media_file.delete()
 
                 # Test create by file object
@@ -84,9 +86,13 @@ class ModelsTestCase(TestCase):
 
                 # Check Audio/Video file deletion during object deletion
                 media_file_path = media_file.file.path
+                if media_format_cls == Video:
+                    preview_file_path = media_file.preview.path
                 self.assertTrue(os.path.exists(media_file_path))
                 media_file.delete()
                 self.assertFalse(os.path.exists(media_file_path))
+                if media_format_cls == Video:
+                    self.assertFalse(os.path.exists(preview_file_path))
 
         test_crud(AudioFormat, Audio, factories.audio_file_factory)
         test_crud(VideoFormat, Video, factories.video_file_factory)

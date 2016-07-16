@@ -26,13 +26,14 @@ class VideoModelForm(BaseMediaFileModelForm):
 
 class VideoAdmin(admin.ModelAdmin):
     form = VideoModelForm
-    list_display = ('title', 'file', 'date_added', 'resolution', 'video_codec', 'audio_codec', 'bitrate')
+    list_display = ('admin_thumbnail', 'title', 'file', 'date_added', 'resolution', 'video_codec', 'audio_codec',
+                    'bitrate')
     readonly_fields = ('video_codec', 'video_bitrate', 'video_height', 'video_width',
                        'audio_codec', 'audio_bitrate', 'audio_channels',
                        'bitrate', 'size', 'duration', 'resolution')
-
+    list_display_links = ('admin_thumbnail', 'title',)
     inlines = (VideoStreamInlineModelAdmin,)
-    prepopulated_fields = {'slug': ('title',), }
+    prepopulated_fields = {'slug': ('title',)}
     search_fields = ('title', 'slug')
 
     fieldsets = (

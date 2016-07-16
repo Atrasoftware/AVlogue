@@ -177,6 +177,14 @@ def get_file_info(input_file):
 
 
 def get_mock_media_file(file_name, media_file_cls, formats=None):
+    """
+    Returns mock media file model with attached streams if formats is not None.
+
+    :param file_name:
+    :param media_file_cls: Audio or Video class.
+    :param formats: list of streams formats.
+    :return:
+    """
     def mock_save(self, name, content):
         return name
 
@@ -184,26 +192,36 @@ def get_mock_media_file(file_name, media_file_cls, formats=None):
     file_mock.name = file_name
     file_mock.path = file_name
 
-    with mock.patch.object(FileSystemStorage, 'save', mock_save):
-        with mock.patch.object(default_encoder, 'get_file_info', get_file_info):
-            media_file = media_file_cls.objects.create_from_file(file_mock)
-            if formats is not None:
-                for format in formats:
-                    stream_info = get_file_info(file_name)
-                    if media_file_cls == Video:
-                        if format.video_bitrate is not None:
-                            stream_info['bitrate'] = format.video_bitrate
-                            stream_info['video_bitrate'] = format.video_bitrate
-                        stream_info['video_codec'] = format.video_codec
-                    if media_file_cls in (Audio, Video):
-                        if format.audio_bitrate is not None:
-                            stream_info['bitrate'] = format.audio_bitrate
-                            stream_info['audio_bitrate'] = format.audio_bitrate
-                        stream_info['audio_codec'] = format.audio_codec
+    mock_file = mock.MagicMock(spec=mock.sentinel.file_spec)
+    mock_file.size = 1
+    mock_file.name = file_name
+    mock_open = mock.MagicMock(return_value=mock_file)
 
-                    stream = media_file.streams.model(media_file=media_file, file=file_mock, format=format,
-                                                      **stream_info)
-                    stream.save()
-                    media_file.streams.add(stream)
+    def dummy_func(*args, **kwargs):
+        pass
+
+    with mock.patch.object(FileSystemStorage, 'save', mock_save):
+        with mock.patch('avlogue.models.open', mock_open):
+            with mock.patch.object(default_encoder, 'get_file_info', get_file_info):
+                with mock.patch.object(default_encoder, 'get_file_preview', dummy_func):
+                    media_file = media_file_cls.objects.create_from_file(file_mock)
+                    if formats is not None:
+                        for format in formats:
+                            stream_info = get_file_info(file_name)
+                            if media_file_cls == Video:
+                                if format.video_bitrate is not None:
+                                    stream_info['bitrate'] = format.video_bitrate
+                                    stream_info['video_bitrate'] = format.video_bitrate
+                                stream_info['video_codec'] = format.video_codec
+                            if media_file_cls in (Audio, Video):
+                                if format.audio_bitrate is not None:
+                                    stream_info['bitrate'] = format.audio_bitrate
+                                    stream_info['audio_bitrate'] = format.audio_bitrate
+                                stream_info['audio_codec'] = format.audio_codec
+
+                            stream = media_file.streams.model(media_file=media_file, file=file_mock, format=format,
+                                                              **stream_info)
+                            stream.save()
+                            media_file.streams.add(stream)
 
     return media_file

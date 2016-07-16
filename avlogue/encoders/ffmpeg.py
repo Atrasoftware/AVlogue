@@ -4,7 +4,7 @@ import subprocess
 
 from avlogue import settings
 from avlogue.encoders.base import BaseEncoder
-from avlogue.encoders.exceptions import GetFileInfoError, EncodeError
+from avlogue.encoders.exceptions import GetFileInfoError, EncodeError, CreatePreviewError
 
 logger = logging.getLogger('django')
 
@@ -17,6 +17,13 @@ class FFProbeError(GetFileInfoError):
 
 
 class FFMpegEncoderError(EncodeError):
+    """
+    ffmpeg command execution error.
+    """
+    pass
+
+
+class FFMpegCreatePreviewError(CreatePreviewError):
     """
     ffmpeg command execution error.
     """
@@ -185,3 +192,26 @@ class FFMpegEncoder(BaseEncoder):
                 errors, repr(encode_format), repr(media_file), cmd))
             raise FFMpegEncoderError(errors, cmd)
         return p
+
+    def get_file_preview(self, input_file, output_file):
+        """
+        Returns preview for media file.
+
+        :param input_file:
+        :type input_file: str
+        :param output_file:
+        :type output_file: str
+        :return: Preview file path
+        :rtype: str
+        """
+        file_info = self.get_file_info(input_file)
+        time = int(file_info['duration'] // 2)
+        cmd = [settings.FFMPEG_EXECUTABLE, '-loglevel', 'error', '-i', input_file, '-ss', str(time), '-vframes', '1',
+               '-vf', 'scale={}'.format(settings.VIDEO_PREVIEW_SIZE), '-y', output_file]
+        logger.debug('ffmpeg file preview command: {}'.format(cmd))
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        errors = p.communicate()[1]
+        if errors:
+            logger.error('ffmpeg creating preview error: {}.\nInput file: {}.\nOutput File:{}\nCommand: {}.'.format(
+                errors, input_file, output_file, cmd))
+            raise FFMpegCreatePreviewError(errors, cmd)

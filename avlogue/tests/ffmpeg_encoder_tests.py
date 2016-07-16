@@ -9,7 +9,7 @@ from django.test import TestCase
 from unittest import skip
 
 from avlogue.encoders import FFMpegEncoder
-from avlogue.encoders.exceptions import EncodeError, GetFileInfoError
+from avlogue.encoders.exceptions import EncodeError, GetFileInfoError, CreatePreviewError
 from avlogue.models import Audio, AudioFormat, VideoFormat, Video
 from avlogue.tests import factories
 from avlogue.tests import mocks
@@ -100,3 +100,9 @@ class FFMpegEncoderTestCase(TestCase):
 
         test_encode_formats(VideoFormat.objects.all(), Video)
         test_encode_formats(AudioFormat.objects.all(), Audio)
+
+    def test_get_file_preview(self):
+        encoder = FFMpegEncoder()
+        input_format = VideoFormat.objects.first()
+        with factories.audio_file_factory('mock_audio', input_format) as input_file:
+            self.assertRaises(CreatePreviewError, encoder.get_file_preview, input_file, 'output')

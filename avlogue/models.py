@@ -1,7 +1,9 @@
 """
 AVlogue models.
 """
+import os
 
+from django.core.files import File
 from django.db import models
 from django.dispatch import receiver
 from django.template.loader import render_to_string
@@ -11,6 +13,7 @@ from django.utils.translation import ugettext_lazy as _
 
 from avlogue import managers
 from avlogue import settings
+from avlogue.encoders import default_encoder
 from avlogue.mime import mimetypes
 from avlogue.utils import ContentTypeValidator
 
@@ -215,6 +218,16 @@ class Video(MediaFile, VideoFields):
     file = models.FileField(_('video file'), upload_to=settings.VIDEO_DIR, storage=settings.MEDIA_STORAGE,
                             validators=[video_file_validator])
 
+    preview = models.FileField(_('video preview'), upload_to=settings.VIDEO_DIR, storage=settings.MEDIA_STORAGE,
+                               null=True, blank=True)
+
+    def admin_thumbnail(self):
+        if self.preview:
+            return '<img width="250" src="{}">'.format(self.preview.url)
+
+    admin_thumbnail.short_description = _('Thumbnail')
+    admin_thumbnail.allow_tags = True
+
     def format_has_lower_quality(self, encode_format):
         """
         Return True if encode_format has a lower quality than current video params.
@@ -229,6 +242,20 @@ class Video(MediaFile, VideoFields):
 
         return audio_bitrate >= (encode_format.audio_bitrate or 0) \
             and video_bitrate >= (encode_format.video_bitrate or 0)
+
+    def save(self, **kwargs):
+        super(Video, self).save(**kwargs)
+        if not self.preview.name:
+            filename = '{}.png'.format(os.path.splitext(os.path.basename(self.file.path))[0])
+            temp_preview_file_path = os.path.join(settings.TEMP_PATH, filename)
+            try:
+                default_encoder.get_file_preview(self.file.path, temp_preview_file_path)
+                self.preview = File(open(temp_preview_file_path, 'rb'))
+                self._old_file = self.file
+                self.save()
+            finally:
+                if os.path.exists(temp_preview_file_path):
+                    os.remove(temp_preview_file_path)
 
 
 @python_2_unicode_compatible
@@ -282,6 +309,8 @@ def delete_media_file_on_model_delete(sender, instance, **kwargs):
     """
     if instance.file:
         instance.file.delete(save=False)
+        if hasattr(instance, 'preview') and instance.preview:
+            instance.preview.delete(save=False)
 
 
 def delete_media_old_file_on_model_change(sender, instance, **kwargs):
@@ -301,6 +330,8 @@ def delete_media_old_file_on_model_change(sender, instance, **kwargs):
 
     if not old_instance.file == instance.file:
         old_instance.file.delete(save=False)
+        if hasattr(instance, 'preview') and instance.preview:
+            instance.preview.delete()
 
 
 # Register media files deletion on model deletion

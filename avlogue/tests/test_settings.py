@@ -78,5 +78,5 @@ CELERY_CACHE_BACKEND = 'memory'
 from .celery import *  # NOQA
 
 AVLOGUE_TEMP_PATH = os.path.abspath(os.path.join(APP_ROOT, '..', 'test_avlogue_temp_path'))
-AVLOGUE_FFMPEG_EXECUTABLE = '/usr/local/Cellar/ffmpeg/3.0.2/bin/ffmpeg'
-AVLOGUE_FFPROBE_EXECUTABLE = '/usr/local/Cellar/ffmpeg/3.0.2/bin/ffprobe'
+AVLOGUE_FFMPEG_EXECUTABLE = '/usr/local/Cellar/ffmpeg/3.1.1/bin/ffmpeg'
+AVLOGUE_FFPROBE_EXECUTABLE = '/usr/local/Cellar/ffmpeg/3.1.1/bin/ffprobe'
