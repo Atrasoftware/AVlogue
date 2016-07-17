@@ -16,7 +16,7 @@ if __name__ == '__main__':
     local('flake8 --ignore=E126 --ignore=W391 --statistics'
           ' --exclude=submodules,migrations,build,docs .')
     local('coverage run --source="avlogue" manage.py test -v 2'
-          ' --traceback --failfast --settings=avlogue.tests.test_settings'
+          ' --traceback --failfast --settings=avlogue.tests.settings.tests'
           ' --pattern="*_tests.py"')
     local('coverage html -d coverage'
           ' --omit="*__init__*,*/settings/*,*/migrations/*,*/tests/*,*admin*"')

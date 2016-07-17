@@ -1,18 +1,24 @@
-from functools import partial
-
 from django.contrib import admin
 from django.utils.translation import ugettext_lazy as _
 
+from avlogue.admin.base import BaseStreamForm, BaseMediaFileAdminMixin
 from avlogue.forms import BaseMediaFileModelForm
-from avlogue.models import VideoStream, Video, VideoFormatSet
-from avlogue.utils import media_file_convert_action
+from avlogue.models import VideoStream, Video
+
+
+class VideoStreamModelForm(BaseStreamForm):
+    class Meta:
+        model = VideoStream
+        fields = '__all__'
 
 
 class VideoStreamInlineModelAdmin(admin.TabularInline):
     model = VideoStream
+    form = VideoStreamModelForm
+
     extra = 0
-    fields = ('format', 'file', 'video_codec', 'video_bitrate', 'resolution', 'bitrate', 'created', 'size')
-    readonly_fields = fields
+    fields = ('file', 'status', 'resolution', 'bitrate', 'size', 'created', 'update',)
+    readonly_fields = tuple(set(fields) - set(('update',)))
 
     def has_add_permission(self, request):
         return False
@@ -24,7 +30,7 @@ class VideoModelForm(BaseMediaFileModelForm):
         fields = '__all__'
 
 
-class VideoAdmin(admin.ModelAdmin):
+class VideoAdmin(BaseMediaFileAdminMixin, admin.ModelAdmin):
     form = VideoModelForm
     list_display = ('admin_thumbnail', 'title', 'file', 'date_added', 'resolution', 'video_codec', 'audio_codec',
                     'bitrate')
@@ -50,12 +56,3 @@ class VideoAdmin(admin.ModelAdmin):
             'fields': ('audio_codec', 'audio_bitrate', 'audio_channels'),
         }),
     )
-
-    def get_actions(self, request):
-        actions = super(VideoAdmin, self).get_actions(request)
-        for format_set in VideoFormatSet.objects.all():
-            action = partial(media_file_convert_action, format_set)
-            name = 'convert_{}'.format(format_set.name)
-            desc = _('Make/update streams for %(format_set)s format set.') % {'format_set': format_set.name}
-            actions[name] = (action, name, desc)
-        return actions

@@ -9,7 +9,7 @@ from django.core.files.storage import FileSystemStorage
 from django.test import TestCase
 
 from avlogue.encoders import default_encoder
-from avlogue.models import Video, VideoFormat, AudioFormat, Audio, VideoFormatSet, AudioFormatSet
+from avlogue.models import Video, VideoFormat, AudioFormat, Audio, VideoFormatSet, AudioFormatSet, VideoStream
 from avlogue.tests import factories
 from avlogue.tests import mocks
 
@@ -40,6 +40,15 @@ class ModelsTestCase(TestCase):
 
         video = Video(video_height=None, video_width=None)
         self.assertEqual(video.resolution, None)
+
+    def test_null_content_type(self):
+        """
+        Tests content_type value if `file`field is None.
+        """
+        video = Video()
+        self.assertIsNone(video.content_type)
+        stream = VideoStream()
+        self.assertIsNone(stream.content_type)
 
     def test_audio_video_file_crud(self):
         """
@@ -130,19 +139,17 @@ class ModelsTestCase(TestCase):
 
                 with mock.patch('avlogue.tasks.open', mock_open):
                     with mock.patch.object(default_encoder, 'get_file_info', mocks.get_file_info):
-                        task = media_file.convert(media_format_set.formats.all())
-                        streams = task.get()
-
+                        streams = media_file.convert(media_format_set.formats.all())
                         self.assertTrue(len(streams), media_format_set.formats.count() - 1)
-                        stream = streams[0]
-                        self.assertEqual(str(stream), "{}: {}".format(str(stream.format), str(media_file)))
-                        self.assertIsNotNone(stream.content_type, 'content type is None: {}'.format(stream))
                         for stream in streams:
+                            stream.refresh_from_db()
+                            self.assertEqual(str(stream), "{}: {}".format(str(stream.format), str(media_file)))
                             self.assertTrue(stream in media_file.streams.all())
+                            self.assertEqual(stream.status, stream.CONVERSION_SUCCESSFUL)
                             self.assertIsNotNone(stream.size)
+                            self.assertIsNotNone(stream.content_type, 'content type is None: {}'.format(stream))
 
-                        task = media_file.convert(media_format_set.formats.all())
-                        new_streams = task.get()
+                        new_streams = media_file.convert(media_format_set.formats.all())
                         self.assertEqual(list(s.id for s in new_streams), list(s.id for s in streams))
                 self.assertIsNotNone(media_file.html_block())
                 popen_patcher.stop()
@@ -161,6 +168,18 @@ class ModelsTestCase(TestCase):
             audio_bitrate=media_file.audio_bitrate + 1000,
             audio_codec=media_file.audio_codec
         )
-        task = media_file.convert((format_with_higher_bitrate,))
-        self.assertIsNone(task)
+        streams = media_file.convert((format_with_higher_bitrate,))
+        self.assertEqual(len(streams), 0)
         self.assertEqual(media_file.streams.count(), 0)
+
+    def test_conversion_failure(self):
+        video = mocks.get_mock_media_file('media_file.mp3', Video, VideoFormat.objects.all())
+
+        video_stream = video.streams.first()
+        try:
+            video_stream.convert()
+        except Exception:
+            pass
+
+        video_stream.refresh_from_db()
+        self.assertEqual(video_stream.status, video_stream.CONVERSION_FAILURE)

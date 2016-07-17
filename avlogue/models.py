@@ -13,6 +13,7 @@ from django.utils.translation import ugettext_lazy as _
 
 from avlogue import managers
 from avlogue import settings
+from avlogue import tasks
 from avlogue.encoders import default_encoder
 from avlogue.mime import mimetypes
 from avlogue.utils import ContentTypeValidator
@@ -25,7 +26,7 @@ class AudioFields(models.Model):
     """
     Audio fields.
     """
-    audio_codec = models.CharField(_('audio codec'), max_length=20,
+    audio_codec = models.CharField(_('audio codec'), max_length=20, null=True,
                                    choices=((name, name) for name in settings.AUDIO_CODECS.keys()))
     audio_bitrate = models.PositiveIntegerField(_('audio bitrate'), null=True, blank=True)
     audio_channels = models.PositiveIntegerField(_('audio channels'), blank=True, null=True)
@@ -38,7 +39,7 @@ class VideoFields(AudioFields):
     """
     Video fields, also contains audio fields.
     """
-    video_codec = models.CharField(_('video codec'), max_length=20,
+    video_codec = models.CharField(_('video codec'), max_length=20, null=True,
                                    choices=((name, name) for name in settings.VIDEO_CODECS.keys()))
     video_bitrate = models.PositiveIntegerField(_('video bitrate'), null=True, blank=True)
     video_width = models.IntegerField(_('video width'), blank=True, null=True)
@@ -59,9 +60,9 @@ class MetaDataFields(models.Model):
     """
     Meta data fields.
     """
-    bitrate = models.PositiveIntegerField(_('average file bitrate'))
-    duration = models.FloatField(_('duration'))
-    size = models.PositiveIntegerField(_('file size'))
+    bitrate = models.PositiveIntegerField(_('average file bitrate'), null=True, blank=True)
+    duration = models.FloatField(_('duration'), null=True, blank=True)
+    size = models.PositiveIntegerField(_('file size'), null=True, blank=True)
 
     class Meta:
         abstract = True
@@ -164,16 +165,22 @@ class MediaFile(MetaDataFields):
 
         :param encode_formats: list of media file formats
         :type encode_formats: list
-        :returns :class:`celery.result.AsyncResult`:
+        :return: list with streams
+        :rtype: list
         """
-        from avlogue import tasks
         encode_formats = list(filter(self.format_has_lower_quality, encode_formats))
-        if encode_formats:
-            return tasks.encode_media_file.delay(self, encode_formats)
+        streams = []
+        for encode_format in encode_formats:
+            stream_cls = self.streams.model
+            stream, created = stream_cls.objects.get_or_create(media_file=self, format=encode_format)
+            stream.convert()
+            streams.append(stream)
+        return streams
 
     @property
     def content_type(self):
-        return mimetypes.guess_type(self.file.url)[0]
+        if self.file.name:
+            return mimetypes.guess_type(self.file.url)[0]
 
     def html_block(self):
         from avlogue.templatetags.avlogue_tags import avlogue_player
@@ -260,14 +267,39 @@ class Video(MediaFile, VideoFields):
 
 @python_2_unicode_compatible
 class BaseStream(MetaDataFields):
+    CONVERSION_IN_PROGRESS = 0
+    CONVERSION_SUCCESSFUL = 1
+    CONVERSION_FAILURE = 2
+    CONVERSION_CHOICES = ((CONVERSION_IN_PROGRESS, _('In progress')), (CONVERSION_SUCCESSFUL, _('Success')),
+                          (CONVERSION_FAILURE, _('Failure')))
+
     created = models.DateTimeField(_('created'), auto_now=True)
+    conversion_task_id = models.CharField(_('Conversion task id'), max_length=50, unique=True, null=True, blank=True)
+    status = models.IntegerField(_('conversion status'), null=True, blank=True, choices=CONVERSION_CHOICES)
 
     def __str__(self):
         return "{}: {}".format(str(self.format), str(self.media_file))
 
+    def clear(self):
+        """
+        Clears stream before conversation.
+        """
+        for field in self._meta.get_fields():
+            if field.name in ('id', 'format', 'media_file'):
+                continue
+            setattr(self, field.name, None)
+
+    def convert(self):
+        """
+        Runs conversion task for the stream.
+        :return: Celery AsyncResult.
+        """
+        return tasks.encode_stream.delay(self.__class__, self.pk)
+
     @property
     def content_type(self):
-        return mimetypes.guess_type(self.file.url)[0]
+        if self.file.name:
+            return mimetypes.guess_type(self.file.url)[0]
 
     class Meta:
         abstract = True

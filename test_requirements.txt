@@ -9,3 +9,4 @@ django-compat
 six
 sphinx
 sphinx-autobuild
+django-celery

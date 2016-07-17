@@ -5,7 +5,6 @@ import logging
 import os
 
 from celery import shared_task
-from django.conf import settings as django_settings
 from django.core import files
 from django.utils.text import slugify
 
@@ -13,39 +12,39 @@ from avlogue import settings
 from avlogue.encoders import default_encoder
 
 
-@shared_task
-def encode_media_file(media_file, encoded_formats):
-    streams = []
-    for encode_format in encoded_formats:
-        output_filename = os.path.splitext(os.path.basename(media_file.file.name))[0]
-        output_filename = '{}_{}.{}'.format(output_filename, slugify(encode_format.name), encode_format.container)
-        output_file = os.path.join(settings.TEMP_PATH, output_filename)
-
+@shared_task(bind=True)
+def encode_stream(self, stream_cls, stream_pk):
+    logger = logging.getLogger('avlogue')
+    stream = stream_cls.objects.filter(pk=stream_pk).first()
+    output_file = None
+    if stream is None:
+        logger.warning("{} stream object was not found by pk={}".format(stream_cls.__name__, stream_pk))
+    else:
         try:
-            default_encoder.encode(media_file, output_file, encode_format)
-        except Exception as e:
-            logger = logging.getLogger('django')
-            logger.error('Conversion to {} failed.\nException:\n{}'.format(repr(encode_format), str(e)))
-            if django_settings.DEBUG:  # pragma: no cover
-                raise e
-        else:
-            stream_file = files.File(open(output_file, 'rb'))
-            stream_cls = media_file.streams.model
+            stream.clear()
+            stream.conversion_task_id = self.request.id
+            stream.status = stream.CONVERSION_IN_PROGRESS
+            stream.save()
 
-            try:
-                stream = stream_cls.objects.get(media_file=media_file, format=encode_format)
-            except stream_cls.DoesNotExist:
-                stream = stream_cls(media_file=media_file, format=encode_format)
-            stream.file = stream_file
+            output_filename = os.path.splitext(os.path.basename(stream.media_file.file.name))[0]
+            output_filename = '{}_{}.{}'.format(output_filename, slugify(stream.format.name), stream.format.container)
+            output_file = os.path.join(settings.TEMP_PATH, output_filename)
+
+            default_encoder.encode(stream.media_file, output_file, stream.format)
+
+            stream.file = files.File(open(output_file, 'rb'))
             stream_file_info = default_encoder.get_file_info(output_file)
             for field_name, value in stream_file_info.items():
                 setattr(stream, field_name, value)
+            stream.status = stream.CONVERSION_SUCCESSFUL
+            stream.conversion_task_id = None
             stream.save()
-
-            streams.append(stream)
+        except Exception as e:
+            logger.error('Conversion of {} failed.\nException:\n{}'.format(repr(stream), str(e)))
+            stream.status = stream.CONVERSION_FAILURE
+            stream.save()
+            raise e
         finally:
             # remove temporary file
-            if os.path.exists(output_file):
+            if output_file is not None and os.path.exists(output_file):
                 os.remove(output_file)
-
-    return streams

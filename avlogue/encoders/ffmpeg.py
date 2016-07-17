@@ -6,7 +6,7 @@ from avlogue import settings
 from avlogue.encoders.base import BaseEncoder
 from avlogue.encoders.exceptions import GetFileInfoError, EncodeError, CreatePreviewError
 
-logger = logging.getLogger('django')
+logger = logging.getLogger('avlogue')
 
 
 class FFProbeError(GetFileInfoError):
