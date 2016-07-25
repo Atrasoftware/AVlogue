@@ -1,13 +1,15 @@
+import os
 import re
+from contextlib import contextmanager
 
 from django.core.exceptions import ValidationError
+from django.core.files import File
 from django.core.files.temp import NamedTemporaryFile
 from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 from django.utils.deconstruct import deconstructible
 from django.utils.translation import ugettext_lazy as _
 
 from avlogue import settings
-from avlogue.encoders import default_encoder
 from avlogue.mime import mimetypes
 
 
@@ -49,25 +51,31 @@ class ContentTypeValidator(object):
         )
 
 
-def get_media_file_info_from_uploaded_file(file, encoder=None, stream_type=None):
+@contextmanager
+def get_local_file_path(file):
     """
-    Saves file in memory into temporary path and returns info about it.
-    :param file: django.core.files.File instance
-    :param encoder: BaseEncoder instance or None
-    :param stream_type: BaseEncoder instance or None
+    Returns local file path.
+    Creates temporary file if it is needed.
+
+    :param file:
     :return:
     """
-    encoder = encoder or default_encoder
     if isinstance(file, TemporaryUploadedFile):
-        return encoder.get_file_info(file.file.name, stream_type=stream_type)
+        yield file.file.name
     elif isinstance(file, InMemoryUploadedFile):
-        with NamedTemporaryFile(delete=True, dir=settings.TEMP_PATH) as temp_file:
-            for chunk in file.chunks():
-                temp_file.write(chunk)
-            temp_file.flush()
-            return encoder.get_file_info(temp_file.name, stream_type=stream_type)
+        temp_file = NamedTemporaryFile(delete=True, dir=settings.TEMP_PATH)
+        for chunk in file.chunks():
+            temp_file.write(chunk)
+        temp_file.flush()
+        try:
+            yield temp_file.name
+        finally:
+            if os.path.exists(temp_file.name):
+                os.remove(temp_file.name)
+    elif isinstance(file, File):
+        yield file.name
     else:
-        raise TypeError('file must be instance of TemporaryUploadedFile or InMemoryUploadedFile')
+        raise TypeError('file must be instance of File, TemporaryUploadedFile or InMemoryUploadedFile')
 
 
 def media_file_convert_action(format_set, model_admin, request, queryset):

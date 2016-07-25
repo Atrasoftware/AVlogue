@@ -2,7 +2,6 @@ import os
 
 import six
 from django.core import files
-from django.core.files.uploadedfile import UploadedFile
 from django.db import models
 from django.utils.text import slugify
 
@@ -23,18 +22,17 @@ class BaseMediaFileQuerySet(models.QuerySet):
         :param slug:
         :return:
         """
+        if isinstance(file, six.string_types):
+            file = files.File(open(file, 'rb'))
+
         stream_type = None
         from avlogue.models import Audio
         if issubclass(self.model, Audio):
             # Skips video stream info
             stream_type = 'audio'
 
-        if isinstance(file, six.string_types):
-            file = files.File(open(file, 'rb'))
-        if isinstance(file, UploadedFile):
-            file_info = utils.get_media_file_info_from_uploaded_file(file, stream_type=stream_type)
-        else:
-            file_info = default_encoder.get_file_info(file.name, stream_type=stream_type)
+        with utils.get_local_file_path(file) as file_path:
+            file_info = default_encoder.get_file_info(file_path, stream_type=stream_type)
 
         if title is None:
             title = os.path.basename(file.name)[0:50]

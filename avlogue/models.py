@@ -4,13 +4,8 @@ AVlogue models.
 import logging
 import os
 
-from avlogue import managers
-from avlogue import settings
-from avlogue import tasks
-from avlogue.encoders import default_encoder
-from avlogue.mime import mimetypes
-from avlogue.utils import ContentTypeValidator
 from celery.result import AsyncResult
+from django.core.exceptions import ValidationError
 from django.core.files import File
 from django.db import models
 from django.dispatch import receiver
@@ -19,10 +14,18 @@ from django.utils.six import python_2_unicode_compatible
 from django.utils.timezone import now
 from django.utils.translation import ugettext_lazy as _
 
+from avlogue import managers
+from avlogue import settings
+from avlogue import tasks
+from avlogue.encoders import default_encoder
+from avlogue.encoders.exceptions import GetFileInfoError
+from avlogue.mime import mimetypes
+from avlogue import utils
+
 logger = logging.getLogger('avlogue')
 
-video_file_validator = ContentTypeValidator((r'video/.*',), message=_('Only video files are allowed.'))
-audio_file_validator = ContentTypeValidator((r'audio/.*',), message=_('Only audio files are allowed.'))
+video_file_validator = utils.ContentTypeValidator((r'video/.*',), message=_('Only video files are allowed.'))
+audio_file_validator = utils.ContentTypeValidator((r'audio/.*',), message=_('Only audio files are allowed.'))
 
 
 class AudioFields(models.Model):
@@ -148,13 +151,48 @@ class VideoFormatSet(BaseFormatSet):
 
 
 class FileChangedMixin(object):
+    """
+    Mixin adds logic to check whether file was changed and to update info.
+    """
     def __init__(self, *args, **kwargs):
         super(FileChangedMixin, self).__init__(*args, **kwargs)
-        self._old_file = self.file
+        if self.pk is not None:
+            self._old_file = self.file
+        else:
+            self._old_file = None
 
     @property
     def file_changed(self):
         return self._old_file != self.file
+
+    def clear_fields(self):
+        fields = []
+        if isinstance(self, MetaDataFields):
+            fields.extend(MetaDataFields._meta.get_fields())
+        if isinstance(self, VideoFields):
+            fields.extend(VideoFields._meta.get_fields())
+        if isinstance(self, AudioFields):
+            fields.extend(AudioFields._meta.get_fields())
+        for field in fields:
+            setattr(self, field.name, None)
+
+    def update_file_info(self):
+        if self.file.name:
+            stream_type = 'audio' if isinstance(self, (Audio, AudioStream)) else None
+            with utils.get_local_file_path(self.file.file) as file_path:
+                file_info = default_encoder.get_file_info(file_path, stream_type=stream_type)
+                for field_name, value in file_info.items():
+                    setattr(self, field_name, value)
+        else:
+            self.clear_fields()
+
+    def full_clean(self, **kwargs):
+        super(FileChangedMixin, self).full_clean(**kwargs)
+        if self.file_changed and self.file.name:
+            try:
+                self.update_file_info()
+            except GetFileInfoError:
+                raise ValidationError("Can't get information about media file.")
 
     def save(self, *args, **kwargs):
         super(FileChangedMixin, self).save(*args, **kwargs)
@@ -201,14 +239,18 @@ class MediaFile(FileChangedMixin, MetaDataFields):
         :return: Returns list of updated steams or None.
         :rtype: li
         """
+        logger.info('Update streams for: {}'.format(repr(self)))
         all_streams_formats = list(map(lambda s: s.format, self.streams.all()))
         if all_streams_formats:
             # Formats to be updated
             formats_to_be_updated = list(filter(self.format_has_lower_quality, all_streams_formats))
+            logger.info('Update streams: {}'.format(formats_to_be_updated))
 
             # Formats with higher quality should be deleted
             formats_to_be_deleted = list(set(all_streams_formats) - set(formats_to_be_updated))
-
+            logger.info('Delete streams: {}'.format(formats_to_be_deleted))
+            for stream in self.streams.filter(format__in=formats_to_be_deleted).all():
+                stream.cancel_conversion()
             self.streams.filter(format__in=formats_to_be_deleted).delete()
             return self.convert(formats_to_be_updated)
 
@@ -344,15 +386,20 @@ class BaseStream(FileChangedMixin, MetaDataFields):
     def __str__(self):
         return "{}: {}".format(str(self.format), str(self.media_file))
 
-    def clear(self):
+    def clear_fields(self):
         """
         Clears stream before conversation.
         """
-        for field in self._meta.get_fields():
-            if field.name in ('id', 'format', 'media_file', 'status'):
-                continue
-            setattr(self, field.name, None)
+        super(BaseStream, self).clear_fields()
+        self.conversion_task_id = None
         self.status = self.CONVERSION_PREPARATION
+        self.file = None
+
+    def cancel_conversion(self):
+        if self.conversion_task_id is not None:
+            AsyncResult(self.conversion_task_id).revoke()
+            logger.info('Cancel conversion task: {}'.format(self.conversion_task_id))
+        self.clear_fields()
 
     def convert(self):
         """
@@ -360,11 +407,7 @@ class BaseStream(FileChangedMixin, MetaDataFields):
         :return: Celery AsyncResult.
         """
         logger.info('Start stream conversion: {}'.format(self))
-        if self.conversion_task_id is not None:
-            AsyncResult(self.conversion_task_id).revoke()
-            logger.info('Cancel previous conversion task: {}'.format(self.conversion_task_id))
-
-        self.clean()
+        self.cancel_conversion()
         self.save()
         return tasks.encode_stream.delay(self.__class__, self.pk)
 
@@ -425,7 +468,7 @@ def delete_media_old_file_on_model_change(sender, instance, **kwargs):
     :param kwargs:
     :return:
     """
-    if instance.file_changed and instance._old_file.name:
+    if instance.file_changed and instance._old_file is not None and instance._old_file.name:
         instance._old_file.storage.delete(instance._old_file.name)
 
 

@@ -2,8 +2,7 @@ from django.contrib import admin
 from django.utils.translation import ugettext_lazy as _
 
 from avlogue.admin.base import BaseStreamForm, BaseMediaFileAdminMixin
-from avlogue.forms import BaseMediaFileModelForm
-from avlogue.models import AudioStream, Audio, AudioFormatSet
+from avlogue.models import AudioStream, AudioFormatSet
 
 
 class AudioStreamModelForm(BaseStreamForm):
@@ -23,14 +22,7 @@ class AudioStreamInlineModelAdmin(admin.TabularInline):
         return False
 
 
-class AudioModelForm(BaseMediaFileModelForm):
-    class Meta:
-        model = Audio
-        fields = '__all__'
-
-
 class AudioAdmin(BaseMediaFileAdminMixin, admin.ModelAdmin):
-    form = AudioModelForm
     list_display = ('title', 'file', 'date_added', 'audio_codec', 'bitrate')
     readonly_fields = ('audio_codec', 'audio_bitrate', 'audio_channels',
                        'bitrate', 'size', 'duration')

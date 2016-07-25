@@ -4,13 +4,15 @@ AVlogue models test cases.
 import os
 
 import mock
+from django.core.exceptions import ValidationError
 from django.core.files.base import File
 from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.test import TestCase
 
 from avlogue.encoders import default_encoder
-from avlogue.models import Video, VideoFormat, AudioFormat, Audio, VideoFormatSet, AudioFormatSet, VideoStream
+from avlogue.models import Video, VideoFormat, AudioFormat, Audio, VideoFormatSet, AudioFormatSet, VideoStream, \
+    video_file_validator, audio_file_validator
 from avlogue.tests import factories
 from avlogue.tests import mocks
 
@@ -83,6 +85,10 @@ class ModelsTestCase(TestCase):
                 # Test create by file object
                 media_file = media_file_cls.objects.create_from_file(File(open(file_path, mode='rb')))
                 self.assertIsNotNone(media_file)
+                assert_media_file_fields(media_file)
+
+                media_file.clear_fields()
+                media_file.update_file_info()
                 assert_media_file_fields(media_file)
 
                 # Test create by uploaded in memory file object
@@ -176,10 +182,11 @@ class ModelsTestCase(TestCase):
                                 self.assertEqual(list(s.id for s in updated_streams), list(s.id for s in streams))
 
                                 stream = updated_streams[0]
-                                stream.clear()
+                                stream.clear_fields()
                                 self.assertEqual(stream.status, stream.CONVERSION_PREPARATION)
                                 self.assertIsNone(stream.file.name)
                                 self.assertIsNone(stream.conversion_task_id)
+                                self.assertIsNone(stream.bitrate)
 
                 self.assertIsNotNone(media_file.html_block())
                 popen_patcher.stop()
@@ -213,3 +220,19 @@ class ModelsTestCase(TestCase):
 
         video_stream.refresh_from_db()
         self.assertEqual(video_stream.status, video_stream.CONVERSION_FAILURE)
+
+    def test_validators(self):
+        video_file = mock.MagicMock()
+        video_file.name = 'video.mp4'
+        audio_file = mock.MagicMock()
+        audio_file.name = 'audio.mp3'
+        file = mock.MagicMock()
+        file.name = 'document.pdf'
+
+        audio_file_validator(audio_file)
+        self.assertRaises(ValidationError, audio_file_validator, file)
+        self.assertRaises(ValidationError, audio_file_validator, video_file)
+
+        video_file_validator(video_file)
+        self.assertRaises(ValidationError, video_file_validator, file)
+        self.assertRaises(ValidationError, video_file_validator, audio_file)

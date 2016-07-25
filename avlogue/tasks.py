@@ -6,6 +6,7 @@ import os
 
 from celery import shared_task
 from django.core import files
+from django.db import DatabaseError
 from django.utils.text import slugify
 
 from avlogue import settings
@@ -17,9 +18,7 @@ def encode_stream(self, stream_cls, stream_pk):
     logger = logging.getLogger('avlogue')
     stream = stream_cls.objects.filter(pk=stream_pk).first()
 
-    if stream is None:
-        logger.warning("{} stream object was not found by pk={}".format(stream_cls.__name__, stream_pk))
-    else:
+    if stream is not None:
         from avlogue.models import AudioStream
         if issubclass(stream_cls, AudioStream):
             # Skips video stream info
@@ -29,7 +28,11 @@ def encode_stream(self, stream_cls, stream_pk):
 
         stream.conversion_task_id = self.request.id
         stream.status = stream.CONVERSION_IN_PROGRESS
-        stream.save()
+        try:
+            stream.save(force_update=True)
+        except DatabaseError:
+            # Stream was deleted
+            return
 
         output_filename = os.path.splitext(os.path.basename(stream.media_file.file.name))[0]
         output_filename = '{}_{}.{}'.format(output_filename, slugify(stream.format.name), stream.format.container)
@@ -44,11 +47,19 @@ def encode_stream(self, stream_cls, stream_pk):
                 setattr(stream, field_name, value)
             stream.status = stream.CONVERSION_SUCCESSFUL
             stream.conversion_task_id = None
-            stream.save()
+            try:
+                stream.save(force_update=True)
+            except DatabaseError:
+                # Stream was deleted
+                return
         except Exception as e:
             logger.error('Conversion of {} failed.\nException:\n{}'.format(repr(stream), str(e)))
             stream.status = stream.CONVERSION_FAILURE
-            stream.save()
+            try:
+                stream.save(force_update=True)
+            except DatabaseError:
+                # Stream was deleted
+                return
             raise e
         finally:
             # remove temporary file
