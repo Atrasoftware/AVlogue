@@ -3,12 +3,14 @@ class BaseEncoder(object):
     Base class for encoder.
     """
 
-    def get_file_info(self, input_file):
+    def get_file_info(self, input_file, stream_type=None):
         """
         Returns information about media file.
 
         :param input_file: input file path
         :type input_file: str
+        :param stream_type: returns only data for specified stream type, can be 'video' or 'audio'
+        :type stream_type: str
         :return: Dictionary populated with Audio or Video fields
         :rtype: dict
         """

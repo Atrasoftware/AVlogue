@@ -6,6 +6,7 @@ import os
 import mock
 from django.core.files.base import File
 from django.core.files.storage import FileSystemStorage
+from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.test import TestCase
 
 from avlogue.encoders import default_encoder
@@ -74,12 +75,20 @@ class ModelsTestCase(TestCase):
                 self.assertIsNotNone(media_file)
                 self.assertEqual(str(media_file), 'test media file')
                 self.assertIsNotNone(media_file.content_type)
-                if media_format_cls == Video:
+                if issubclass(media_file_cls, Video):
                     self.assertIsNotNone(media_file.preview.name)
+                    self.assertIsNotNone(media_file.admin_thumbnail())
                 media_file.delete()
 
                 # Test create by file object
                 media_file = media_file_cls.objects.create_from_file(File(open(file_path, mode='rb')))
+                self.assertIsNotNone(media_file)
+                assert_media_file_fields(media_file)
+
+                # Test create by uploaded in memory file object
+                # file = open(file_path, mode='rb')
+                file = InMemoryUploadedFile(open(file_path, mode='rb'), None, 'uploaded_file', 'text', 1, None)
+                media_file = media_file_cls.objects.create_from_file(file)
                 self.assertIsNotNone(media_file)
                 assert_media_file_fields(media_file)
 
@@ -123,6 +132,12 @@ class ModelsTestCase(TestCase):
                 media_format_set = AudioFormatSet.objects.first()
             file_name = 'media_file.{}'.format(media_format_set.formats.first().container)
 
+            def mock_path_exists(file_path):
+                return True
+
+            def mock_remove(file_path):
+                return True
+
             with mock.patch.object(FileSystemStorage, 'save', mock_save):
                 media_file = mocks.get_mock_media_file(file_name, media_file_cls)
 
@@ -139,18 +154,33 @@ class ModelsTestCase(TestCase):
 
                 with mock.patch('avlogue.tasks.open', mock_open):
                     with mock.patch.object(default_encoder, 'get_file_info', mocks.get_file_info):
-                        streams = media_file.convert(media_format_set.formats.all())
-                        self.assertTrue(len(streams), media_format_set.formats.count() - 1)
-                        for stream in streams:
-                            stream.refresh_from_db()
-                            self.assertEqual(str(stream), "{}: {}".format(str(stream.format), str(media_file)))
-                            self.assertTrue(stream in media_file.streams.all())
-                            self.assertEqual(stream.status, stream.CONVERSION_SUCCESSFUL)
-                            self.assertIsNotNone(stream.size)
-                            self.assertIsNotNone(stream.content_type, 'content type is None: {}'.format(stream))
+                        with mock.patch('os.path.exists', mock_path_exists):
+                            with mock.patch('os.remove', mock_remove):
+                                streams = media_file.convert(media_format_set.formats.all())
 
-                        new_streams = media_file.convert(media_format_set.formats.all())
-                        self.assertEqual(list(s.id for s in new_streams), list(s.id for s in streams))
+                                self.assertTrue(len(streams), media_format_set.formats.count() - 1)
+                                for stream in streams:
+                                    stream.refresh_from_db()
+
+                                    self.assertEqual(str(stream), "{}: {}".format(str(stream.format), str(media_file)))
+                                    self.assertEqual(stream.media_file.id, media_file.id)
+                                    self.assertEqual(stream.status, stream.CONVERSION_SUCCESSFUL)
+                                    self.assertEqual(stream.get_status_text(), 'Success')
+                                    self.assertIsNotNone(stream.size)
+                                    self.assertIsNotNone(stream.file.name)
+                                    self.assertIsNone(stream.conversion_task_id)
+                                    self.assertIsNotNone(stream.content_type,
+                                                         'content type is None: {}'.format(stream))
+
+                                updated_streams = media_file.update_streams()
+                                self.assertEqual(list(s.id for s in updated_streams), list(s.id for s in streams))
+
+                                stream = updated_streams[0]
+                                stream.clear()
+                                self.assertEqual(stream.status, stream.CONVERSION_PREPARATION)
+                                self.assertIsNone(stream.file.name)
+                                self.assertIsNone(stream.conversion_task_id)
+
                 self.assertIsNotNone(media_file.html_block())
                 popen_patcher.stop()
 

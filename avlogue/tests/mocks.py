@@ -140,10 +140,11 @@ def ffprobe(input_file):
         raise Exception('Unknown input file format: {}'.format(input_file))
 
 
-def get_file_info(input_file):
+def get_file_info(input_file, stream_type=None):
     """
     Returns mock streams info by input_file.
     :param input_file:
+    :param stream_type:
     :return:
     """
     ext = os.path.splitext(os.path.basename(input_file))[1][1:].lower()
@@ -154,13 +155,13 @@ def get_file_info(input_file):
         'duration': random.randint(10, 50),
     }
 
-    if ext in settings.AUDIO_CONTAINERS:
+    if ext in settings.AUDIO_CONTAINERS and stream_type in (None, 'audio'):
         info.update({
             'audio_codec': random.choice(list(settings.AUDIO_CODECS.keys())),
             'audio_bitrate': 192000,
             'audio_channels': 2,
         })
-    elif ext in settings.VIDEO_CONTAINERS:
+    elif ext in settings.VIDEO_CONTAINERS and stream_type in (None, 'video'):
         info.update({
             'audio_codec': random.choice(list(settings.AUDIO_CODECS.keys())),
             'audio_bitrate': 192000,

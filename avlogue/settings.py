@@ -2,13 +2,44 @@
 AVlogue settings.
 """
 import os
+import shutil
 
 from django.conf import settings
 from django.core.files.storage import default_storage
 
 
+def which(cmd):
+    """
+    Return the path to an executable which would be run if the given cmd was called.
+    If no cmd would be called, return None.
+
+    :param cmd:
+    :return:
+    """
+    if hasattr(shutil, 'which'):
+        return shutil.which(cmd)
+    else:
+
+        def is_exe(fpath):
+            return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+        fpath, fname = os.path.split(cmd)
+        if fpath:
+            if is_exe(cmd):
+                return cmd
+        else:
+            for path in os.environ["PATH"].split(os.pathsep):
+                path = path.strip('"')
+                exe_file = os.path.join(path, cmd)
+                if is_exe(exe_file):
+                    return exe_file
+
+        return None
+
+
 def get_avlogue_setting(name, default):
     return getattr(settings, 'AVLOGUE_{}'.format(name), default)
+
 
 #: Base AVlogue directory.
 DIR = get_avlogue_setting('DIR', 'avlogue')
@@ -30,11 +61,16 @@ TEMP_PATH = get_avlogue_setting('TEMP_PATH', '/tmp/avlogue')
 if not os.path.exists(TEMP_PATH):
     os.mkdir(TEMP_PATH)
 
+assert os.access(TEMP_PATH, os.W_OK), 'AVlogue must have write access into `{}` temporary path'.format(TEMP_PATH)
+
 #: Path to ffmpeg executable.
 FFMPEG_EXECUTABLE = get_avlogue_setting('FFMPEG_EXECUTABLE', 'ffmpeg')
 
 #: Path to ffprobe executable.
 FFPROBE_EXECUTABLE = get_avlogue_setting('FFPROBE_EXECUTABLE', 'ffprobe')
+
+assert which(FFMPEG_EXECUTABLE) is not None, "ffmpeg `{}` was not found.".format(FFMPEG_EXECUTABLE)
+assert which(FFPROBE_EXECUTABLE) is not None, "ffprobe `{}` was not found.".format(FFMPEG_EXECUTABLE)
 
 #: Video codecs. Key is a human name, value is a encoder library.
 VIDEO_CODECS = get_avlogue_setting('VIDEO_CODECS', {
@@ -65,7 +101,7 @@ AUDIO_CODECS = get_avlogue_setting('AUDIO_CODECS', {
     'vorbis': 'libvorbis',
     'ac3': 'ac3',
     'pcm_f32le': 'pcm_f32le',
-    'pcm_s16be': 'pcm_s16be',
+    'pcm_s16be': 'pcm_s16be'
 })
 
 #: Video containers. Key is a file extension, value is a encoder container name.
@@ -76,6 +112,7 @@ AUDIO_CONTAINERS = get_avlogue_setting('AUDIO_CONTAINERS', {
     'wav': 'wav',
     'aiff': 'aiff',
     'ogg': 'ogg',
+    'aac': 'adts'
 })
 
 #: Audio/Video files storage.

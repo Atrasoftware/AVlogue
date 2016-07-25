@@ -1,8 +1,16 @@
 """
 AVlogue models.
 """
+import logging
 import os
 
+from avlogue import managers
+from avlogue import settings
+from avlogue import tasks
+from avlogue.encoders import default_encoder
+from avlogue.mime import mimetypes
+from avlogue.utils import ContentTypeValidator
+from celery.result import AsyncResult
 from django.core.files import File
 from django.db import models
 from django.dispatch import receiver
@@ -11,12 +19,7 @@ from django.utils.six import python_2_unicode_compatible
 from django.utils.timezone import now
 from django.utils.translation import ugettext_lazy as _
 
-from avlogue import managers
-from avlogue import settings
-from avlogue import tasks
-from avlogue.encoders import default_encoder
-from avlogue.mime import mimetypes
-from avlogue.utils import ContentTypeValidator
+logger = logging.getLogger('avlogue')
 
 video_file_validator = ContentTypeValidator((r'video/.*',), message=_('Only video files are allowed.'))
 audio_file_validator = ContentTypeValidator((r'audio/.*',), message=_('Only audio files are allowed.'))
@@ -144,8 +147,22 @@ class VideoFormatSet(BaseFormatSet):
     formats = models.ManyToManyField(VideoFormat, verbose_name=_('formats'), related_name='format_sets')
 
 
+class FileChangedMixin(object):
+    def __init__(self, *args, **kwargs):
+        super(FileChangedMixin, self).__init__(*args, **kwargs)
+        self._old_file = self.file
+
+    @property
+    def file_changed(self):
+        return self._old_file != self.file
+
+    def save(self, *args, **kwargs):
+        super(FileChangedMixin, self).save(*args, **kwargs)
+        self._old_file = self.file
+
+
 @python_2_unicode_compatible
-class MediaFile(MetaDataFields):
+class MediaFile(FileChangedMixin, MetaDataFields):
     """
     Base media file model.
     """
@@ -170,12 +187,39 @@ class MediaFile(MetaDataFields):
         """
         encode_formats = list(filter(self.format_has_lower_quality, encode_formats))
         streams = []
+        stream_cls = self.streams.model
         for encode_format in encode_formats:
-            stream_cls = self.streams.model
             stream, created = stream_cls.objects.get_or_create(media_file=self, format=encode_format)
             stream.convert()
             streams.append(stream)
         return streams
+
+    def update_streams(self):
+        """
+        Updates media file streams.
+
+        :return: Returns list of updated steams or None.
+        :rtype: li
+        """
+        all_streams_formats = list(map(lambda s: s.format, self.streams.all()))
+        if all_streams_formats:
+            # Formats to be updated
+            formats_to_be_updated = list(filter(self.format_has_lower_quality, all_streams_formats))
+
+            # Formats with higher quality should be deleted
+            formats_to_be_deleted = list(set(all_streams_formats) - set(formats_to_be_updated))
+
+            self.streams.filter(format__in=formats_to_be_deleted).delete()
+            return self.convert(formats_to_be_updated)
+
+    def save(self, *args, **kwargs):
+        """
+        Updates streams if file has been changed.
+        """
+        file_changed = self.file_changed
+        super(MediaFile, self).save(*args, **kwargs)
+        if file_changed:
+            self.update_streams()
 
     @property
     def content_type(self):
@@ -250,32 +294,52 @@ class Video(MediaFile, VideoFields):
         return audio_bitrate >= (encode_format.audio_bitrate or 0) \
             and video_bitrate >= (encode_format.video_bitrate or 0)
 
-    def save(self, **kwargs):
-        super(Video, self).save(**kwargs)
-        if not self.preview.name:
-            filename = '{}.png'.format(os.path.splitext(os.path.basename(self.file.path))[0])
-            temp_preview_file_path = os.path.join(settings.TEMP_PATH, filename)
-            try:
-                default_encoder.get_file_preview(self.file.path, temp_preview_file_path)
-                self.preview = File(open(temp_preview_file_path, 'rb'))
-                self._old_file = self.file
-                self.save()
-            finally:
-                if os.path.exists(temp_preview_file_path):
-                    os.remove(temp_preview_file_path)
+    def save(self, *args, **kwargs):
+        file_changed = self.file_changed
+        super(Video, self).save(*args, **kwargs)
+
+        if file_changed or not self.preview.name:
+            preview_changed = False
+            if self.preview.name:
+                self.preview.storage.delete(self.preview.name)
+                self.preview = None
+                preview_changed = True
+
+            if self.file.name:
+                filename = '{}.png'.format(os.path.splitext(os.path.basename(self.file.name))[0])
+                temp_preview_file_path = os.path.join(settings.TEMP_PATH, filename)
+                try:
+                    default_encoder.get_file_preview(self.file.path, temp_preview_file_path)
+                    self.preview = File(open(temp_preview_file_path, 'rb'))
+                    preview_changed = True
+                finally:
+                    if os.path.exists(temp_preview_file_path):
+                        os.remove(temp_preview_file_path)
+
+            if preview_changed:
+                self.save(update_fields=['preview'])
 
 
 @python_2_unicode_compatible
-class BaseStream(MetaDataFields):
-    CONVERSION_IN_PROGRESS = 0
-    CONVERSION_SUCCESSFUL = 1
-    CONVERSION_FAILURE = 2
-    CONVERSION_CHOICES = ((CONVERSION_IN_PROGRESS, _('In progress')), (CONVERSION_SUCCESSFUL, _('Success')),
-                          (CONVERSION_FAILURE, _('Failure')))
+class BaseStream(FileChangedMixin, MetaDataFields):
+    CONVERSION_PREPARATION = 0
+    CONVERSION_IN_PROGRESS = 1
+    CONVERSION_SUCCESSFUL = 2
+    CONVERSION_FAILURE = 3
+
+    # Sort choices by status code to easy get text
+    CONVERSION_CHOICES = sorted(((CONVERSION_PREPARATION, _('Preparation to conversion')),
+                                 (CONVERSION_IN_PROGRESS, _('In progress')),
+                                 (CONVERSION_SUCCESSFUL, _('Success')),
+                                 (CONVERSION_FAILURE, _('Failure'))),
+                                key=lambda s: s[0])
 
     created = models.DateTimeField(_('created'), auto_now=True)
     conversion_task_id = models.CharField(_('Conversion task id'), max_length=50, unique=True, null=True, blank=True)
-    status = models.IntegerField(_('conversion status'), null=True, blank=True, choices=CONVERSION_CHOICES)
+    status = models.IntegerField(_('conversion status'), default=CONVERSION_PREPARATION, choices=CONVERSION_CHOICES)
+
+    def get_status_text(self):
+        return self.CONVERSION_CHOICES[self.status][1]
 
     def __str__(self):
         return "{}: {}".format(str(self.format), str(self.media_file))
@@ -285,15 +349,23 @@ class BaseStream(MetaDataFields):
         Clears stream before conversation.
         """
         for field in self._meta.get_fields():
-            if field.name in ('id', 'format', 'media_file'):
+            if field.name in ('id', 'format', 'media_file', 'status'):
                 continue
             setattr(self, field.name, None)
+        self.status = self.CONVERSION_PREPARATION
 
     def convert(self):
         """
         Runs conversion task for the stream.
         :return: Celery AsyncResult.
         """
+        logger.info('Start stream conversion: {}'.format(self))
+        if self.conversion_task_id is not None:
+            AsyncResult(self.conversion_task_id).revoke()
+            logger.info('Cancel previous conversion task: {}'.format(self.conversion_task_id))
+
+        self.clean()
+        self.save()
         return tasks.encode_stream.delay(self.__class__, self.pk)
 
     @property
@@ -339,10 +411,10 @@ def delete_media_file_on_model_delete(sender, instance, **kwargs):
     :param kwargs:
     :return:
     """
-    if instance.file:
-        instance.file.delete(save=False)
-        if hasattr(instance, 'preview') and instance.preview:
-            instance.preview.delete(save=False)
+    if instance.file.name:
+        instance.file.storage.delete(instance.file.name)
+    if isinstance(instance, Video) and instance.preview.name:
+        instance.preview.storage.delete(instance.preview.name)
 
 
 def delete_media_old_file_on_model_change(sender, instance, **kwargs):
@@ -353,17 +425,8 @@ def delete_media_old_file_on_model_change(sender, instance, **kwargs):
     :param kwargs:
     :return:
     """
-    if instance.pk is None:
-        return False
-    try:
-        old_instance = sender.objects.get(pk=instance.pk)
-    except sender.DoesNotExist:
-        return False
-
-    if not old_instance.file == instance.file:
-        old_instance.file.delete(save=False)
-        if hasattr(instance, 'preview') and instance.preview:
-            instance.preview.delete()
+    if instance.file_changed and instance._old_file.name:
+        instance._old_file.storage.delete(instance._old_file.name)
 
 
 # Register media files deletion on model deletion

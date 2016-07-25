@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import subprocess
 
 from avlogue import settings
@@ -78,28 +79,37 @@ class FFMpegEncoder(BaseEncoder):
             'video_height': int(stream['height'])
         }
 
-    def get_file_info(self, input_file):
+    def get_file_info(self, input_file, stream_type=None):
         """
         Executes ffprobe to get information about media file.
 
         :param input_file: input file path
         :type input_file: str
-
+        :param stream_type: returns only data for specified stream type, can be 'video' or 'audio'
+        :type stream_type: str
         :return: Dictionary populated with Audio or Video fields
         :rtype: dict
         """
+        assert stream_type in (None, 'video', 'audio'), "stream_type can be 'video' or 'audio'"
+
         probe_data = self._probe(input_file)
 
-        # NOTE: first streams are used
-        video_streams = filter(lambda s: s['codec_type'] == 'video', probe_data['streams'])
-        audio_streams = filter(lambda s: s['codec_type'] == 'audio', probe_data['streams'])
+        video_stream = None
+        audio_stream = None
 
-        if isinstance(video_streams, list):
-            video_streams = iter(video_streams)
-        if isinstance(audio_streams, list):
-            audio_streams = iter(audio_streams)
-        video_stream = next(video_streams, None)
-        audio_stream = next(audio_streams, None)
+        if stream_type in (None, 'video'):
+            video_streams = filter(lambda s: s['codec_type'] == 'video', probe_data['streams'])
+            if isinstance(video_streams, list):
+                video_streams = iter(video_streams)
+            # NOTE: first stream is used
+            video_stream = next(video_streams, None)
+
+        if stream_type in (None, 'audio'):
+            audio_streams = filter(lambda s: s['codec_type'] == 'audio', probe_data['streams'])
+            if isinstance(audio_streams, list):
+                audio_streams = iter(audio_streams)
+            # NOTE: first stream is used
+            audio_stream = next(audio_streams, None)
 
         info = {
             'bitrate': int(probe_data['format']['bit_rate']),
@@ -115,9 +125,8 @@ class FFMpegEncoder(BaseEncoder):
 
     def _get_audio_params(self, encode_format):
         params = []
-        audio_codec = settings.AUDIO_CODECS[encode_format.audio_codec]
-        if audio_codec is not None:
-            params.extend(('-acodec', audio_codec))
+        if encode_format.audio_codec is not None:
+            params.extend(('-acodec', settings.AUDIO_CODECS[encode_format.audio_codec]))
         if encode_format.audio_bitrate is not None:
             params.extend(('-b:a', str(encode_format.audio_bitrate)))
 
@@ -188,9 +197,15 @@ class FFMpegEncoder(BaseEncoder):
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         errors = p.communicate()[1]
         if errors:
-            logger.error('ffmpeg conversion error: {}.Encode format: {}.\nFile: {}.\nCommand: {}.'.format(
-                errors, repr(encode_format), repr(media_file), cmd))
+            logger.error('ffmpeg conversion error: {}.\nEncode format: {}.\n'
+                         'Input file: {}.\nOutput file: {}.\nCommand: {}.'.format(errors, repr(encode_format),
+                                                                                  repr(media_file), output_file, cmd))
             raise FFMpegEncoderError(errors, cmd)
+        if not os.path.exists(output_file):
+            logger.error('ffmpeg conversion error: no output file after conversion.\nEncode format: {}.\n'
+                         'Input file: {}.\nOutput file: {}.\nCommand: {}.'
+                         .format(repr(encode_format), repr(media_file), output_file, cmd))
+            raise FFMpegEncoderError('No output file after conversion.', cmd)
         return p
 
     def get_file_preview(self, input_file, output_file):
@@ -212,6 +227,12 @@ class FFMpegEncoder(BaseEncoder):
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         errors = p.communicate()[1]
         if errors:
-            logger.error('ffmpeg creating preview error: {}.\nInput file: {}.\nOutput File:{}\nCommand: {}.'.format(
-                errors, input_file, output_file, cmd))
+            logger.error('ffmpeg creating preview error: {}.'
+                         '\nInput file: {}.\nOutput File:{}\nCommand: {}.'.format(errors, input_file,
+                                                                                  output_file, cmd))
             raise FFMpegCreatePreviewError(errors, cmd)
+        if not os.path.exists(output_file):
+            logger.error('ffmpeg creating preview error: no output file after creating preview.'
+                         '\nInput file: {}.\nOutput File:{}\nCommand: {}.'.format(input_file, output_file, cmd))
+            raise FFMpegCreatePreviewError('No output file after creating preview.', cmd)
+        return p

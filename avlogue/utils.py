@@ -6,9 +6,9 @@ from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUpload
 from django.utils.deconstruct import deconstructible
 from django.utils.translation import ugettext_lazy as _
 
-from avlogue.mime import mimetypes
 from avlogue import settings
 from avlogue.encoders import default_encoder
+from avlogue.mime import mimetypes
 
 
 @deconstructible
@@ -32,11 +32,12 @@ class ContentTypeValidator(object):
         self.message = message or self.message
         self.code = code or self.code
 
-    def __call__(self, file_field):
-        file_content_type = mimetypes.guess_type(file_field.file.name)[0] or ''
-        for content_type in self.allowed_content_types:
-            if content_type.match(file_content_type):
-                return
+    def __call__(self, value):
+        file_content_type = mimetypes.guess_type(value.name)[0]
+        if file_content_type is not None:
+            for content_type in self.allowed_content_types:
+                if content_type.match(file_content_type):
+                    return
         raise ValidationError(self.message, code=self.code)
 
     def __eq__(self, other):
@@ -48,22 +49,23 @@ class ContentTypeValidator(object):
         )
 
 
-def get_media_file_info_from_uploaded_file(file, encoder=None):
+def get_media_file_info_from_uploaded_file(file, encoder=None, stream_type=None):
     """
     Saves file in memory into temporary path and returns info about it.
     :param file: django.core.files.File instance
     :param encoder: BaseEncoder instance or None
+    :param stream_type: BaseEncoder instance or None
     :return:
     """
     encoder = encoder or default_encoder
     if isinstance(file, TemporaryUploadedFile):
-        return encoder.get_file_info(file.file.name)
+        return encoder.get_file_info(file.file.name, stream_type=stream_type)
     elif isinstance(file, InMemoryUploadedFile):
         with NamedTemporaryFile(delete=True, dir=settings.TEMP_PATH) as temp_file:
             for chunk in file.chunks():
                 temp_file.write(chunk)
             temp_file.flush()
-            return encoder.get_file_info(temp_file.name)
+            return encoder.get_file_info(temp_file.name, stream_type=stream_type)
     else:
         raise TypeError('file must be instance of TemporaryUploadedFile or InMemoryUploadedFile')
 

@@ -2,11 +2,11 @@
 FFMpegEncoder test cases.
 """
 import os
+from unittest import skip
 
 import mock
 from django.conf import settings
 from django.test import TestCase
-from unittest import skip
 
 from avlogue.encoders import FFMpegEncoder
 from avlogue.encoders.exceptions import EncodeError, GetFileInfoError, CreatePreviewError
@@ -44,6 +44,14 @@ class FFMpegEncoderTestCase(TestCase):
             self.assertEqual(info['audio_codec'], mocks.MOCK_AUDIO_STREAM['codec_name'])
             self.assertEqual(info['audio_bitrate'], int(mocks.MOCK_AUDIO_STREAM['bit_rate']))
             self.assertEqual(info['audio_channels'], mocks.MOCK_AUDIO_STREAM['channels'])
+
+            info = encoder.get_file_info('video.mp4', 'audio')
+            video_info = dict(filter(lambda k: k.startswith('video'), info))
+            self.assertTrue(len(video_info) == 0)
+
+            info = encoder.get_file_info('video.mp4', 'video')
+            audio_info = dict(filter(lambda k: k.startswith('audio'), info))
+            self.assertTrue(len(audio_info) == 0)
 
     def test_encode_with_invalid_params(self):
         """
