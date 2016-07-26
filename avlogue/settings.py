@@ -89,7 +89,7 @@ VIDEO_CONTAINERS = get_avlogue_setting('VIDEO_CONTAINERS', {
     'avi': 'avi',
     'flv': 'flv',
     'mp4': 'mp4',
-    'ogv': 'ogv',
+    'ogv': 'ogg',
     '3gp': '3gp'
 })
 
