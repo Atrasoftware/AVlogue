@@ -236,8 +236,8 @@ class MediaFile(FileChangedMixin, MetaDataFields):
         """
         Updates media file streams.
 
-        :return: Returns list of updated steams or None.
-        :rtype: li
+        :return: Returns list of updated steams.
+        :rtype: list
         """
         logger.info('Update streams for: {}'.format(repr(self)))
         all_streams_formats = list(map(lambda s: s.format, self.streams.all()))
@@ -253,6 +253,7 @@ class MediaFile(FileChangedMixin, MetaDataFields):
                 stream.cancel_conversion()
             self.streams.filter(format__in=formats_to_be_deleted).delete()
             return self.convert(formats_to_be_updated)
+        return []
 
     def save(self, *args, **kwargs):
         """
