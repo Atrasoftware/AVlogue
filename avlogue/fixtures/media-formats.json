@@ -131,7 +131,7 @@
     "pk": 6,
     "fields": {
       "name": "theora 720p",
-      "container": "ogg",
+      "container": "ogv",
       "audio_codec": "vorbis",
       "audio_bitrate": 128000,
       "video_codec": "theora",
